@@ -9,7 +9,7 @@ Servicios incluidos:
 
 - Odoo 18 (imagen custom desde `Dockerfile`)
 - PostgreSQL 16
-- Nginx opcional en contenedor (perfil `docker-nginx`)
+- Nginx opcional en contenedor solo para desarrollo o referencia (perfil `docker-nginx`)
 
 Nota: Nginx no se instala en el Dockerfile de Odoo; usa su propia imagen separada cuando se habilita el perfil.
 
@@ -36,7 +36,6 @@ Copia `.env.example` como `.env` y ajusta valores:
 - `POSTGRES_DB`
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
-- `ODOO_ADMIN_PASSWORD`
 - `ODOO_DB_FILTER`
 - `ODOO_WORKERS`
 - `ODOO_MAX_CRON_THREADS`
@@ -50,6 +49,8 @@ Ademas, antes de desplegar ajusta secretos en archivos de config:
 
 - `config/odoo.dev.conf`: `surpay_encryption_key`, `admin_passwd`, `db_password`
 - `config/odoo.prod.conf`: `surpay_encryption_key`, `admin_passwd`, `db_password`
+
+En Odoo 18 la master password se toma desde `admin_passwd` en el archivo `.conf`.
 
 No commitees secretos reales. Este repositorio incluye placeholders para compartir codigo de forma segura.
 
@@ -72,12 +73,9 @@ Acceso:
 
 ## 3) Levantar produccion
 
-Coloca tus certificados en:
+Para produccion se asume Nginx en la maquina host, no en Docker.
 
-- `nginx/certs/fullchain.pem`
-- `nginx/certs/privkey.pem`
-
-Luego:
+Levanta Odoo con:
 
 ```bash
 docker compose --env-file .env -f compose.prod.yml up -d --build
@@ -85,16 +83,11 @@ docker compose --env-file .env -f compose.prod.yml up -d --build
 
 Esto deja Odoo publicado solo en localhost (`127.0.0.1:8069` y `127.0.0.1:8072`) para que lo atienda Nginx del servidor.
 
-Si prefieres usar Nginx dentro de Docker:
-
-```bash
-docker compose --env-file .env -f compose.prod.yml --profile docker-nginx up -d --build
-```
-
 Acceso:
 
 - Con Nginx del host: configura proxy a `http://127.0.0.1:8069` y `http://127.0.0.1:8072` (longpolling)
-- Con Nginx en Docker profile: HTTP redirige a HTTPS y acceso por https://localhost
+
+Los archivos de `nginx/` quedan solo como referencia de configuracion.
 
 ## 4) Backups
 
@@ -150,3 +143,34 @@ Se aplicaron medidas base de seguridad y operacion:
 - Rotacion automatica de backups por antiguedad (`BACKUP_RETENTION_DAYS`)
 
 La limpieza de backups se ejecuta al final de cada corrida de `./scripts/backup.sh`.
+
+## 8) Deploy automatico de modulos modificados (GitHub Actions)
+
+Se incluye el workflow `.github/workflows/odoo-modules-deploy.yml` para:
+
+- Detectar modulos cambiados bajo `addons/`.
+- Conectarse por SSH al servidor.
+- Ejecutar `scripts/deploy_upgrade_modules.sh` (backup + upgrade selectivo).
+
+### Requisitos en GitHub (Secrets)
+
+Configura estos secrets en el repositorio:
+
+- `DEPLOY_HOST`: IP o hostname del servidor.
+- `DEPLOY_USER`: usuario SSH para deploy.
+- `DEPLOY_SSH_KEY`: llave privada SSH en formato PEM.
+- `DEPLOY_PORT`: puerto SSH (normalmente `22`).
+- `DEPLOY_PATH`: ruta absoluta del repo en el servidor (ejemplo `/opt/odoo_surpay`).
+
+### Requisitos en servidor
+
+- Repo clonado en `DEPLOY_PATH`.
+- `.env` local configurado (no versionado).
+- Docker y Docker Compose operativos.
+- Nginx instalado en el host y configurado como reverse proxy hacia `127.0.0.1:8069` y `127.0.0.1:8072`.
+- Stack inicial levantado al menos una vez.
+
+### Ejecucion
+
+- Push a `master` con cambios en `addons/**`: ejecuta deploy automatico.
+- Ejecucion manual desde Actions (`workflow_dispatch`): permite indicar lista de modulos.
