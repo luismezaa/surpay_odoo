@@ -268,12 +268,12 @@ class SurpayProviderConfig(models.Model):
         """Test actual connection to Depay API with provided credentials."""
         import requests
         
-        api_key = creds.get("api_key", "").strip()
-        customer_uuid = creds.get("customer_uuid", "").strip()
+        api_key = (creds.get("api_key") or "").strip()
+        customer_uuid = (creds.get("customer_uuid") or "").strip()
         if not api_key:
             raise ValidationError("Depay API key is required")
         
-        base_url = creds.get("base_url", "https://stage.api.payments.depay.us").rstrip("/")
+        base_url = (creds.get("base_url") or "https://stage.api.payments.depay.us").rstrip("/")
         timeout = 20
         
         # Build URL based on environment
@@ -325,11 +325,11 @@ class SurpayProviderConfig(models.Model):
         """Test actual connection to Klap API with provided credentials."""
         import requests
         
-        api_key = creds.get("api_key", "").strip()
+        api_key = (creds.get("api_key") or "").strip()
         if not api_key:
             raise ValidationError("Klap API key is required")
         
-        base_url = creds.get("base_url", "https://api.klap.com").rstrip("/")
+        base_url = (creds.get("base_url") or "https://api.klap.com").rstrip("/")
         timeout = 20
         
         _logger.info("Testing Klap connection to: %s", base_url)

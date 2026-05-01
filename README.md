@@ -89,6 +89,9 @@ Acceso:
 
 Los archivos de `nginx/` quedan solo como referencia de configuracion.
 
+Para Nginx en el host se incluye un ejemplo listo para el dominio `surpay.helpit.cl` en `nginx/surpay.helpit.cl.conf`.
+Ese archivo no incluye certificados ni bloques SSL para que puedas gestionarlos con Certbot sobre la maquina.
+
 ## 4) Backups
 
 Ejecutar backup (por defecto usa `.env` y `compose.prod.yml`):
