@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="payment_link_page" name="Surpay Payment Link">
+        <html>
+            <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <title>Pago con QR</title>
+                <style>
+                    :root {
+                        --bg: #e8ebef;
+                        --text: #1f2a37;
+                        --muted: #5f6b7a;
+                        --card: #f4f5f7;
+                        --line: #d8dce3;
+                        --accent: #0d3f9b;
+                    }
+
+                    * {
+                        box-sizing: border-box;
+                    }
+
+                    body {
+                        margin: 0;
+                        min-height: 100vh;
+                        background: radial-gradient(circle at 20% 0%, #f1f4f8 0%, var(--bg) 50%, #dfe5eb 100%);
+                        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                        color: var(--text);
+                    }
+
+                    .wrap {
+                        max-width: 760px;
+                        margin: 0 auto;
+                        padding: 36px 20px 40px;
+                    }
+
+                    .panel {
+                        background: rgba(255, 255, 255, 0.58);
+                        border: 1px solid rgba(255, 255, 255, 0.65);
+                        border-radius: 18px;
+                        box-shadow: 0 18px 40px rgba(30, 42, 60, 0.09);
+                        backdrop-filter: blur(8px);
+                        padding: 30px;
+                    }
+
+                    h1 {
+                        margin: 0;
+                        font-size: 40px;
+                        line-height: 1;
+                    }
+
+                    .merchant {
+                        margin: 0 0 10px;
+                        font-size: 40px;
+                        font-weight: 800;
+                    }
+
+                    .subtitle {
+                        margin: 0 0 28px;
+                        font-size: 30px;
+                        color: #111827;
+                    }
+
+                    .helper {
+                        margin: 0 0 26px;
+                        font-size: 17px;
+                        color: var(--muted);
+                    }
+
+                    .label {
+                        margin: 0;
+                        font-size: 41px;
+                        font-weight: 700;
+                    }
+
+                    .value {
+                        margin: 8px 0 22px;
+                        font-size: 40px;
+                        font-weight: 600;
+                    }
+
+                    .amount-row {
+                        background: var(--card);
+                        border: 1px solid var(--line);
+                        border-radius: 10px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        gap: 12px;
+                        padding: 20px 18px;
+                        margin: 8px 0 28px;
+                    }
+
+                    .amount-main {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        font-size: 38px;
+                        font-weight: 600;
+                    }
+
+                    .currency {
+                        font-size: 30px;
+                        color: #334155;
+                        font-weight: 700;
+                    }
+
+                    .qr-box {
+                        margin: 30px auto 12px;
+                        width: fit-content;
+                        border-radius: 16px;
+                        padding: 14px;
+                        background: white;
+                        border: 1px solid var(--line);
+                        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1);
+                    }
+
+                    #qrcode {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        line-height: 0;
+                    }
+
+                    #qrcode img,
+                    #qrcode canvas {
+                        width: 260px;
+                        height: 260px;
+                    }
+
+                    #qrcode-fallback {
+                        display: none;
+                        width: 260px;
+                        height: 260px;
+                        margin: 0 auto;
+                    }
+
+                    .qr-hint {
+                        margin: 10px 0 0;
+                        text-align: center;
+                        font-size: 14px;
+                        color: var(--muted);
+                    }
+
+                    .state {
+                        margin-top: 16px;
+                        font-size: 15px;
+                        color: var(--muted);
+                    }
+
+                    .state-pill {
+                        margin-top: 16px;
+                        display: inline-flex;
+                        align-items: center;
+                        padding: 8px 12px;
+                        border-radius: 999px;
+                        font-weight: 700;
+                        font-size: 14px;
+                        letter-spacing: 0.02em;
+                        text-transform: uppercase;
+                        background: #e2e8f0;
+                        color: #334155;
+                    }
+
+                    .state-pill.pending {
+                        background: #fef3c7;
+                        color: #92400e;
+                    }
+
+                    .state-pill.paid {
+                        background: #dcfce7;
+                        color: #166534;
+                    }
+
+                    .state-pill.failed {
+                        background: #fee2e2;
+                        color: #991b1b;
+                    }
+
+                    @media (max-width: 760px) {
+                        .panel {
+                            padding: 22px 18px;
+                        }
+
+                        .merchant,
+                        .subtitle,
+                        .label,
+                        .value,
+                        .amount-main,
+                        .currency {
+                            font-size: 30px;
+                        }
+
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="wrap">
+                    <div class="panel" t-att-data-token="payment_token">
+                        <p class="merchant">Pago a <t t-esc="merchant_name" /></p>
+                        <p class="helper">Verifica que la informacion este correcta para proceder con el pago.</p>
+
+                        <p class="label">Concepto: <span class="value" style="font-size:inherit;font-weight:500;"><t t-esc="concept" /></span></p>
+
+                        <p class="label" style="font-size:44px;">Valor del pago:</p>
+                        <div class="amount-row">
+                            <div class="amount-main">
+                                <span>$</span>
+                                <span><t t-esc="amount_display" /></span>
+                            </div>
+                            <div class="currency"><t t-esc="currency" /></div>
+                        </div>
+
+                        <div class="qr-box" t-if="qr_data">
+                            <div id="qrcode" t-att-data-qr="qr_data"></div>
+                            <img id="qrcode-fallback" alt="QR de pago" />
+                            <p class="qr-hint">Escanea este codigo QR con tu app para completar el pago.</p>
+                        </div>
+                        <div class="qr-box" t-if="not qr_data">
+                            <p class="qr-hint" style="margin:0;">El QR aun no esta disponible.</p>
+                        </div>
+
+                        <p class="state">Estado de transaccion:</p>
+                        <div id="state-pill" class="state-pill">
+                            <t t-esc="state" />
+                        </div>
+                    </div>
+                </div>
+
+                <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+                <script t-if="qr_data" type="text/javascript">
+                    (function () {
+                        var container = document.getElementById("qrcode");
+                        var fallbackImg = document.getElementById("qrcode-fallback");
+                        var qrData = container ? container.getAttribute("data-qr") : "";
+                        if (!container || !qrData) {
+                            return;
+                        }
+
+                        function showFallback() {
+                            if (!fallbackImg) {
+                                return;
+                            }
+                            fallbackImg.src = "https://quickchart.io/qr?text=" + encodeURIComponent(qrData) + "&amp;size=280";
+                            fallbackImg.style.display = "block";
+                        }
+
+                        if (typeof QRCode === "undefined") {
+                            showFallback();
+                            return;
+                        }
+
+                        QRCode.toCanvas(
+                            container,
+                            qrData,
+                            {
+                                width: 280,
+                                margin: 1,
+                            },
+                            function (err) {
+                                if (err) {
+                                    showFallback();
+                                }
+                            }
+                        );
+                    })();
+                </script>
+                <script type="text/javascript">
+                    (function () {
+                        var panel = document.querySelector(".panel");
+                        var statePill = document.getElementById("state-pill");
+                        if (!panel || !statePill) {
+                            return;
+                        }
+
+                        var token = panel.getAttribute("data-token");
+                        if (!token) {
+                            return;
+                        }
+
+                        function stateClass(state) {
+                            if (state === "paid") {
+                                return "paid";
+                            }
+                            if (state === "failed" || state === "expired" || state === "cancelled") {
+                                return "failed";
+                            }
+                            return "pending";
+                        }
+
+                        function updateStateLabel(state) {
+                            statePill.textContent = state;
+                            statePill.classList.remove("pending", "paid", "failed");
+                            statePill.classList.add(stateClass(state));
+                        }
+
+                        updateStateLabel(statePill.textContent.trim().toLowerCase());
+
+                        function pollStatus() {
+                            fetch("/pay/" + token + "/status", {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                },
+                                body: "{}",
+                            })
+                                .then(function (res) {
+                                    return res.json();
+                                })
+                                .then(function (payload) {
+                                    var result = payload &amp;&amp; payload.result ? payload.result : payload;
+                                    if (!result || result.error || !result.state) {
+                                        return;
+                                    }
+                                    var state = String(result.state).toLowerCase();
+                                    updateStateLabel(state);
+                                    if (!result.done) {
+                                        window.setTimeout(pollStatus, 5000);
+                                    }
+                                })
+                                .catch(function () {
+                                    window.setTimeout(pollStatus, 7000);
+                                });
+                        }
+
+                        window.setTimeout(pollStatus, 3000);
+                    })();
+                </script>
+            </body>
+        </html>
+    </template>
+</odoo>

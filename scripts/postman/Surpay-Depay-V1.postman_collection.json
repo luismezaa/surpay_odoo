@@ -1,0 +1,173 @@
+{
+  "info": {
+    "_postman_id": "7a8b8f5f-9f9f-4f66-9d9b-1e336eb0f001",
+    "name": "Surpay Depay V1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection to test l10n_cl_surpay_depay module endpoints (create/status/provider webhook)."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function randomNonce() {",
+          "  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+          "    const r = Math.random() * 16 | 0;",
+          "    const v = c === 'x' ? r : (r & 0x3 | 0x8);",
+          "    return v.toString(16);",
+          "  });",
+          "}",
+          "",
+          "const ts = Math.floor(Date.now() / 1000).toString();",
+          "const nonce = randomNonce();",
+          "",
+          "if (!pm.collectionVariables.get('idempotency_key')) {",
+          "  pm.collectionVariables.set('idempotency_key', randomNonce());",
+          "}",
+          "",
+          "const method = pm.request.method.toUpperCase();",
+          "const path = '/' + pm.request.url.path.join('/');",
+          "const queryPairs = pm.request.url.query.all()",
+          "  .filter(q => !q.disabled)",
+          "  .map(q => [q.key || '', q.value || '']);",
+          "queryPairs.sort((a, b) => (a[0] + '=' + a[1]).localeCompare(b[0] + '=' + b[1]));",
+          "const normalizedQuery = queryPairs.map(q => q[0] + '=' + q[1]).join('&');",
+          "",
+          "let rawBody = '';",
+          "if (pm.request.body && pm.request.body.mode === 'raw') {",
+          "  rawBody = pm.request.body.raw || '';",
+          "}",
+          "const bodyHashHex = CryptoJS.SHA256(rawBody).toString(CryptoJS.enc.Hex);",
+          "",
+          "const canonical = [method, path, normalizedQuery, bodyHashHex, ts, nonce].join('\\n');",
+          "const secret = pm.collectionVariables.get('client_secret') || '';",
+          "const hmacWordArray = CryptoJS.HmacSHA256(canonical, secret);",
+          "const signatureB64 = CryptoJS.enc.Base64.stringify(hmacWordArray);",
+          "",
+          "pm.request.headers.upsert({ key: 'X-Client-Id', value: pm.collectionVariables.get('client_id') || '' });",
+          "pm.request.headers.upsert({ key: 'X-Timestamp', value: ts });",
+          "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+          "pm.request.headers.upsert({ key: 'X-Signature', value: signatureB64 });",
+          "",
+          "if (!pm.request.headers.has('Idempotency-Key') && method === 'POST') {",
+          "  pm.request.headers.upsert({ key: 'Idempotency-Key', value: pm.collectionVariables.get('idempotency_key') });",
+          "}",
+          "",
+          "pm.collectionVariables.set('last_canonical', canonical);",
+          "pm.collectionVariables.set('last_signature', signatureB64);"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8069" },
+    { "key": "client_id", "value": "demo-client" },
+    { "key": "client_secret", "value": "demo-secret" },
+    { "key": "idempotency_key", "value": "" },
+    { "key": "order_id", "value": "" },
+    { "key": "external_order_id", "value": "ext-001" },
+    { "key": "depay_api_key", "value": "" },
+    { "key": "depay_customer_uuid", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Create Payment Intent (Depay QR)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{idempotency_key}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"provider\": \"depay\",\n  \"amount\": 1000,\n  \"currency\": \"ARS\",\n  \"local_country\": \"CL\",\n  \"qr_from\": \"AR\",\n  \"external_order_id\": \"{{external_order_id}}\",\n  \"expires_in\": 900\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/payments/intents",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "payments", "intents"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200 or 201', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});",
+              "const data = pm.response.json();",
+              "if (data && data.order_id) {",
+              "  pm.collectionVariables.set('order_id', data.order_id);",
+              "}",
+              "if (data && data.external_order_id) {",
+              "  pm.collectionVariables.set('external_order_id', data.external_order_id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Get Payment Intent Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/payments/intents/{{order_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "payments", "intents", "{{order_id}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Provider Webhook (Depay) - Manual Simulation",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const payload = pm.request.body && pm.request.body.raw ? pm.request.body.raw : '{}';",
+              "const customerUuid = pm.collectionVariables.get('depay_customer_uuid') || '';",
+              "const apiKey = pm.collectionVariables.get('depay_api_key') || '';",
+              "const signedData = payload + '+' + customerUuid;",
+              "const signatureHex = CryptoJS.HmacSHA256(signedData, apiKey).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({ key: 'signature', value: signatureHex });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"order_id\": \"REPLACE_WITH_PROVIDER_ORDER_ID\",\n  \"type\": \"PAYMENT\",\n  \"status\": \"COMPLETED\",\n  \"message\": \"Payment acreditado\",\n  \"external_reference\": \"{{external_order_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/webhooks/providers/depay",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "webhooks", "providers", "depay"]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+name: odoo_surpay
+
+services:
+  db:
+    image: postgres:16
+    container_name: odoo_surpay_db_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - odoo_net_dev
+
+  odoo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: odoo_surpay_app_dev
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: db
+      PORT: 5432
+      USER: ${POSTGRES_USER}
+      PASSWORD: ${POSTGRES_PASSWORD}
+      ODOO_RC: /etc/odoo/odoo.conf
+    command:
+      - odoo
+      - -c
+      - /etc/odoo/odoo.conf
+      - --dev=reload,qweb,xml
+    volumes:
+      - odoo_data_dev:/var/lib/odoo
+      - ./addons:/mnt/extra-addons
+      - ./config/odoo.dev.conf:/etc/odoo/odoo.conf:ro
+      - ./backups:/backups
+    ports:
+      - "8069:8069"
+      - "8072:8072"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8069/web/login || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - odoo_net_dev
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: odoo_surpay_nginx_dev
+    profiles:
+      - docker-nginx
+    restart: unless-stopped
+    depends_on:
+      odoo:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - odoo_net_dev
+
+volumes:
+  db_data_dev:
+  odoo_data_dev:
+
+networks:
+  odoo_net_dev:
+    driver: bridge

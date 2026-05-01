@@ -1,0 +1,15 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.swp
+.env
+.env.*
+backups/*
+!backups/.gitkeep
+nginx/certs/*
+!nginx/certs/.gitkeep

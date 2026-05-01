@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="surpay_cash_closure_list" model="ir.ui.view">
+        <field name="name">surpay.cash.closure.list</field>
+        <field name="model">surpay.cash.closure</field>
+        <field name="arch" type="xml">
+            <list string="Cash Closures">
+                <field name="name"/>
+                <field name="state"/>
+                <field name="user_id"/>
+                <field name="date_from"/>
+                <field name="date_to"/>
+                <field name="sales_channel"/>
+                <field name="provider"/>
+                <field name="transaction_count"/>
+                <field name="total_amount"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="surpay_cash_closure_form" model="ir.ui.view">
+        <field name="name">surpay.cash.closure.form</field>
+        <field name="model">surpay.cash.closure</field>
+        <field name="arch" type="xml">
+            <form string="Cash Closure">
+                <header>
+                    <button name="action_load_transactions" type="object" string="Load Transactions" class="btn-secondary" invisible="state != 'draft'"/>
+                    <button name="action_close_cash" type="object" string="Close Cash" class="btn-primary" invisible="state != 'draft'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,closed"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Closure Info">
+                            <field name="name" readonly="1"/>
+                            <field name="user_id" readonly="1"/>
+                            <field name="date_from" readonly="state == 'closed'"/>
+                            <field name="date_to" readonly="state == 'closed'"/>
+                        </group>
+                        <group string="Filters">
+                            <field name="provider" readonly="state == 'closed'"/>
+                            <field name="sales_channel" readonly="state == 'closed'"/>
+                            <field name="transaction_count" readonly="1"/>
+                            <field name="total_amount" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Transactions Included">
+                        <field name="transaction_ids" readonly="state == 'closed'">
+                            <list create="0" delete="0" edit="0">
+                                <field name="create_date" string="Created"/>
+                                <field name="order_id"/>
+                                <field name="state"/>
+                                <field name="sales_channel"/>
+                                <field name="partner_id"/>
+                                <field name="client_id"/>
+                                <field name="provider"/>
+                                <field name="amount"/>
+                                <field name="currency"/>
+                                <field name="transferred"/>
+                            </list>
+                        </field>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="surpay_cash_closure_search" model="ir.ui.view">
+        <field name="name">surpay.cash.closure.search</field>
+        <field name="model">surpay.cash.closure</field>
+        <field name="arch" type="xml">
+            <search string="Cash Closures">
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="sales_channel"/>
+                <field name="provider"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="surpay_cash_closure_action" model="ir.actions.act_window">
+        <field name="name">Cash Closure</field>
+        <field name="res_model">surpay.cash.closure</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem
+        id="surpay_cash_closure_menu"
+        name="Cash Closure"
+        parent="surpay_menu_root"
+        action="surpay_cash_closure_action"
+        sequence="4"
+    />
+</odoo>

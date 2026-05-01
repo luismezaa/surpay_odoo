@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="0">
+    <record id="ir_cron_outbound_webhook_retry" model="ir.cron">
+        <field name="name">[DEPRECATED] Surpay Outbound Webhook Retry</field>
+        <field name="model_id" ref="surpay_base.model_surpay_payment_event"/>
+        <field name="state">code</field>
+        <field name="code">model.run_outbound_webhook_retries()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">False</field>
+    </record>
+</odoo>

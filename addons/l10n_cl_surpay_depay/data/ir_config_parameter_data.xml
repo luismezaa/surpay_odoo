@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="param_surpay_depay_base_url" model="ir.config_parameter">
+        <field name="key">l10n_cl_surpay_depay.base_url</field>
+        <field name="value">https://stage.api.payments.depay.us</field>
+    </record>
+
+    <record id="param_surpay_depay_api_key_header" model="ir.config_parameter">
+        <field name="key">l10n_cl_surpay_depay.api_key_header</field>
+        <field name="value">x-api-key</field>
+    </record>
+
+    <record id="param_surpay_depay_default_expiration_seconds" model="ir.config_parameter">
+        <field name="key">l10n_cl_surpay_depay.default_expiration_seconds</field>
+        <field name="value">900</field>
+    </record>
+
+    <record id="param_surpay_depay_timeout_seconds" model="ir.config_parameter">
+        <field name="key">l10n_cl_surpay_depay.timeout_seconds</field>
+        <field name="value">20</field>
+    </record>
+</odoo>

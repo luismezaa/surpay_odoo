@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_surpay_api_nonce_system,surpay.api.nonce system,model_surpay_api_nonce,base.group_system,1,1,1,1
+access_surpay_payment_intent_system,surpay.payment.intent system,model_surpay_payment_intent,base.group_system,1,1,1,1

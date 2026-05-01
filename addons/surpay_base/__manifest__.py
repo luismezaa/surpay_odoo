@@ -1,0 +1,22 @@
+{
+    "name": "Surpay Base",
+    "summary": "Base configuration module for Surpay integrations",
+    "version": "18.0.1.0.0",
+    "category": "Tools",
+    "author": "Surpay",
+    "license": "LGPL-3",
+    "depends": ["base", "contacts", "mail"],
+    "data": [
+        "security/surpay_groups.xml",
+        "security/ir.model.access.csv",
+        "data/ir_cron_data.xml",
+        "data/ir_sequence_data.xml",
+        "views/provider_config_views.xml",
+        "views/api_client_views.xml",
+        "views/payment_transaction_views.xml",
+        "views/cash_closure_views.xml",
+        "views/internal_sale_templates.xml",
+    ],
+    "installable": True,
+    "application": True,
+}

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List View -->
+    <record id="surpay_provider_config_list" model="ir.ui.view">
+        <field name="name">surpay.provider.config.list</field>
+        <field name="model">surpay.provider.config</field>
+        <field name="arch" type="xml">
+            <list string="Provider Configurations">
+                <field name="provider" />
+                <field name="environment" />
+                <field name="state" />
+                <field name="last_test_date" />
+                <field name="write_date" />
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="surpay_provider_config_form" model="ir.ui.view">
+        <field name="name">surpay.provider.config.form</field>
+        <field name="model">surpay.provider.config</field>
+        <field name="arch" type="xml">
+            <form string="Provider Configuration">
+                <header>
+                    <button
+                        name="action_test_connection"
+                        type="object"
+                        string="🔗 Test Connection"
+                        class="btn-primary"
+                    />
+                    <field name="state" widget="statusbar" options="{'clickable': True}" />
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Provider Details">
+                            <field name="provider" />
+                            <field name="environment" />
+                        </group>
+                        <group string="Metadata">
+                            <field name="create_date" />
+                            <field name="create_uid" />
+                            <field name="write_date" />
+                            <field name="write_uid" />
+                            <field name="last_test_date" />
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <!-- Depay Specific Credentials -->
+                        <page string="Credentials" name="credentials">
+                            <group>
+                                <field name="api_key" password="True" help="Provider API Key (stored encrypted)" />
+                                <field name="customer_uuid" help="Customer UUID for provider (stored encrypted)" />
+                                <field name="pos_id" help="Point of Sale ID (stored encrypted)" />
+                                <field name="webhook_secret" password="True" help="Webhook Secret (stored encrypted)" />
+                                <field name="base_url" help="Base URL for provider API (stored encrypted)" />
+                                <field name="webhook_url" help="Webhook URL for receiving provider callbacks" />
+                            </group>
+                        </page>
+
+                        <!-- Notes -->
+                        <page string="Notes" name="notes">
+                            <field name="notes" nolabel="1" />
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="surpay_provider_config_search" model="ir.ui.view">
+        <field name="name">surpay.provider.config.search</field>
+        <field name="model">surpay.provider.config</field>
+        <field name="arch" type="xml">
+            <search string="Provider Configurations">
+                <field name="provider" />
+                <field name="environment" />
+                <filter name="active_configs" string="Active" domain="[('state', '=', 'active')]" />
+                <filter name="sandbox" string="Sandbox" domain="[('environment', '=', 'sandbox')]" />
+                <filter name="production" string="Production" domain="[('environment', '=', 'production')]" />
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="surpay_provider_config_action" model="ir.actions.act_window">
+        <field name="name">Payment Provider Configuration</field>
+        <field name="res_model">surpay.provider.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new payment provider configuration
+            </p>
+            <p>
+                Configure credentials for each payment provider (Depay, Klap, etc.).
+                Credentials are encrypted and stored securely in the database.
+            </p>
+        </field>
+    </record>
+
+    <menuitem
+        id="surpay_menu_root"
+        name="Surpay"
+        groups="surpay_base.group_surpay_restricted_user,base.group_system"
+        sequence="60"
+    />
+
+    <!-- Menu Item -->
+    <menuitem
+        id="surpay_provider_config_menu"
+        name="Provider Configuration"
+        parent="surpay_menu_root"
+        action="surpay_provider_config_action"
+        sequence="1"
+    />
+</odoo>

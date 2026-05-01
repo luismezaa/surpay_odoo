@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="surpay_new_sale_url_action" model="ir.actions.act_url">
+        <field name="name">Nueva Venta</field>
+        <field name="url">/surpay/new-sale</field>
+        <field name="target">self</field>
+    </record>
+
+    <menuitem
+        id="surpay_new_sale_menu"
+        name="Nueva Venta"
+        parent="surpay_menu_root"
+        action="surpay_new_sale_url_action"
+        sequence="0"
+    />
+
+    <template id="new_sale_page" name="Surpay New Sale">
+        <html>
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Nueva Venta</title>
+                <style>
+                    :root {
+                        --bg: #f4f6f8;
+                        --card: #ffffff;
+                        --line: #d9e1ea;
+                        --text: #1d2a39;
+                        --muted: #5d6b7b;
+                        --primary: #0b5394;
+                    }
+                    * { box-sizing: border-box; }
+                    body {
+                        margin: 0;
+                        min-height: 100vh;
+                        font-family: "Segoe UI", Tahoma, sans-serif;
+                        background: radial-gradient(circle at 0% 0%, #eef4fb 0%, var(--bg) 45%, #e9eff5 100%);
+                        color: var(--text);
+                    }
+                    .wrap {
+                        max-width: 720px;
+                        margin: 42px auto;
+                        padding: 0 18px;
+                    }
+                    .card {
+                        background: var(--card);
+                        border: 1px solid var(--line);
+                        border-radius: 16px;
+                        padding: 28px;
+                        box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+                    }
+                    h1 {
+                        margin: 0 0 8px;
+                        font-size: 30px;
+                    }
+                    .subtitle {
+                        margin: 0 0 22px;
+                        color: var(--muted);
+                    }
+                    .field { margin-bottom: 14px; }
+                    label {
+                        display: block;
+                        margin-bottom: 6px;
+                        font-weight: 600;
+                    }
+                    input, select {
+                        width: 100%;
+                        height: 44px;
+                        border: 1px solid #c5cfda;
+                        border-radius: 10px;
+                        padding: 0 12px;
+                        font-size: 15px;
+                    }
+                    .actions {
+                        margin-top: 18px;
+                        display: flex;
+                        gap: 10px;
+                    }
+                    button, .actions a {
+                        height: 44px;
+                        border: 0;
+                        border-radius: 10px;
+                        padding: 0 16px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        text-decoration: none;
+                    }
+                    .primary {
+                        background: var(--primary);
+                        color: #fff;
+                    }
+                    .secondary {
+                        background: #e7ebf0;
+                        color: #1f2a37;
+                    }
+                    .msg {
+                        margin-top: 14px;
+                        min-height: 22px;
+                        color: #b91c1c;
+                        font-weight: 600;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="wrap">
+                    <div class="card">
+                        <h1>Nueva Venta</h1>
+                        <p class="subtitle">Completa los datos y abre el pago en una pestaña nueva.</p>
+
+                        <div class="field">
+                            <label for="amount_clp">Precio en Pesos</label>
+                            <input id="amount_clp" type="number" min="1" step="1" placeholder="Ej: 25000"/>
+                        </div>
+                        <div class="field">
+                            <label for="concept">Código de referencia (concepto)</label>
+                            <input id="concept" type="text" placeholder="Ej: Compra TV 42"/>
+                        </div>
+                        <div class="field">
+                            <label for="email">Correo Electrónico</label>
+                            <input id="email" type="email" placeholder="cliente@correo.com"/>
+                        </div>
+                        <div class="field">
+                            <label for="provider_config_id">Plataforma de pago</label>
+                            <select id="provider_config_id">
+                                <t t-foreach="provider_configs" t-as="cfg">
+                                    <option t-att-value="cfg.id" t-att-selected="cfg.id == default_provider_config_id and 'selected' or None">
+                                        <t t-esc="cfg.provider.upper()"/> - <t t-esc="cfg.environment"/>
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+
+                        <div class="actions">
+                            <button id="submitBtn" class="primary">Ir a pagar</button>
+                            <a class="secondary" t-att-href="odoo_return_url">Volver</a>
+                        </div>
+                        <div id="msg" class="msg"></div>
+                    </div>
+                </div>
+
+                <script type="text/javascript">
+                    (function () {
+                        var submitBtn = document.getElementById("submitBtn");
+                        var msg = document.getElementById("msg");
+
+                        function getVal(id) {
+                            var el = document.getElementById(id);
+                            return el ? el.value : "";
+                        }
+
+                        function setMessage(text) {
+                            msg.textContent = text || "";
+                        }
+
+                        function startPayment() {
+                            setMessage("");
+                            var amount = parseFloat(getVal("amount_clp") || "0");
+                            var concept = (getVal("concept") || "").trim();
+                            var email = (getVal("email") || "").trim();
+                            var providerConfigId = parseInt(getVal("provider_config_id"), 10);
+
+                            if (!(amount > 0)) {
+                                setMessage("Ingresa un precio válido en pesos.");
+                                return;
+                            }
+                            if (!concept) {
+                                setMessage("Ingresa el código de referencia (concepto).");
+                                return;
+                            }
+                            if (!providerConfigId) {
+                                setMessage("Selecciona una plataforma de pago.");
+                                return;
+                            }
+
+                            var paymentTab = window.open("about:blank", "_blank");
+                            submitBtn.disabled = true;
+                            submitBtn.textContent = "Procesando...";
+
+                            fetch("/surpay/new-sale/start", {
+                                method: "POST",
+                                headers: {"Content-Type": "application/json"},
+                                body: JSON.stringify({
+                                    amount_clp: amount,
+                                    concept: concept,
+                                    email: email,
+                                    provider_config_id: providerConfigId,
+                                }),
+                            })
+                                .then(function (res) { return res.json(); })
+                                .then(function (payload) {
+                                    var result = payload &amp;&amp; payload.result ? payload.result : payload;
+                                    if (!result || result.error) {
+                                        var errorMessage = (result &amp;&amp; result.error &amp;&amp; result.error.message) || "No fue posible iniciar el pago.";
+                                        if (paymentTab &amp;&amp; !paymentTab.closed) {
+                                            paymentTab.close();
+                                        }
+                                        setMessage(errorMessage);
+                                        submitBtn.disabled = false;
+                                        submitBtn.textContent = "Ir a pagar";
+                                        return;
+                                    }
+
+                                    if (paymentTab &amp;&amp; !paymentTab.closed) {
+                                        paymentTab.location.href = result.payment_url;
+                                    } else {
+                                        window.open(result.payment_url, "_blank");
+                                    }
+
+                                    window.location.href = result.processing_url;
+                                })
+                                .catch(function () {
+                                    if (paymentTab &amp;&amp; !paymentTab.closed) {
+                                        paymentTab.close();
+                                    }
+                                    setMessage("Error de conexión al iniciar el pago.");
+                                    submitBtn.disabled = false;
+                                    submitBtn.textContent = "Ir a pagar";
+                                });
+                        }
+
+                        submitBtn.addEventListener("click", startPayment);
+                    })();
+                </script>
+            </body>
+        </html>
+    </template>
+
+    <template id="new_sale_processing_page" name="Surpay New Sale Processing">
+        <html>
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Procesando Pago</title>
+                <style>
+                    body {
+                        margin: 0;
+                        min-height: 100vh;
+                        font-family: "Segoe UI", Tahoma, sans-serif;
+                        display: grid;
+                        place-items: center;
+                        background: #f3f6fb;
+                        color: #1f2937;
+                    }
+                    .box {
+                        width: min(560px, 92vw);
+                        background: #fff;
+                        border: 1px solid #d9e1ea;
+                        border-radius: 16px;
+                        box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+                        padding: 28px;
+                        text-align: center;
+                    }
+                    .spinner {
+                        width: 52px;
+                        height: 52px;
+                        border: 4px solid #dbe3ef;
+                        border-top-color: #0b5394;
+                        border-radius: 50%;
+                        margin: 4px auto 14px;
+                        animation: spin 1s linear infinite;
+                    }
+                    @keyframes spin {
+                        to { transform: rotate(360deg); }
+                    }
+                    .state {
+                        font-weight: 700;
+                        margin-top: 12px;
+                    }
+                    .hint {
+                        color: #5b6472;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="box" t-att-data-order-id="order_id">
+                    <div class="spinner"></div>
+                    <h1>Procesando pago</h1>
+                    <p class="hint">El pago se abrió en otra pestaña. Espera confirmación para continuar.</p>
+                    <p class="state">Estado actual: <span id="stateLabel"><t t-esc="state"/></span></p>
+                    <p class="hint">Concepto: <t t-esc="concept or '-'"/> | Monto: <t t-esc="amount"/> <t t-esc="currency"/></p>
+                </div>
+
+                <script type="text/javascript">
+                    (function () {
+                        var box = document.querySelector(".box");
+                        var label = document.getElementById("stateLabel");
+                        if (!box || !label) {
+                            return;
+                        }
+                        var orderId = box.getAttribute("data-order-id");
+                        if (!orderId) {
+                            return;
+                        }
+
+                        function poll() {
+                            fetch("/surpay/new-sale/status/" + encodeURIComponent(orderId), {
+                                method: "POST",
+                                headers: {"Content-Type": "application/json"},
+                                body: "{}",
+                            })
+                                .then(function (res) { return res.json(); })
+                                .then(function (payload) {
+                                    var result = payload &amp;&amp; payload.result ? payload.result : payload;
+                                    if (!result || result.error) {
+                                        window.setTimeout(poll, 5000);
+                                        return;
+                                    }
+
+                                    label.textContent = result.state;
+
+                                    if (result.done) {
+                                        if (result.paid) {
+                                            window.location.href = "/surpay/new-sale/success/" + encodeURIComponent(orderId);
+                                            return;
+                                        }
+                                        if (result.failed) {
+                                            window.location.href = "/surpay/new-sale/failed/" + encodeURIComponent(orderId);
+                                            return;
+                                        }
+                                    }
+
+                                    window.setTimeout(poll, 4000);
+                                })
+                                .catch(function () {
+                                    window.setTimeout(poll, 6000);
+                                });
+                        }
+
+                        window.setTimeout(poll, 2500);
+                    })();
+                </script>
+            </body>
+        </html>
+    </template>
+
+    <template id="new_sale_success_page" name="Surpay New Sale Success">
+        <html>
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Pago Exitoso</title>
+                <style>
+                    body { font-family: "Segoe UI", Tahoma, sans-serif; background: #f2f8f4; margin: 0; }
+                    .box { max-width: 560px; margin: 70px auto; background: #fff; border: 1px solid #d3e7da; border-radius: 14px; padding: 24px; text-align: center; }
+                    h1 { color: #166534; margin-top: 0; }
+                    a { display: inline-block; margin-top: 14px; padding: 10px 14px; background: #166534; color: #fff; border-radius: 8px; text-decoration: none; }
+                    .actions { margin-top: 18px; display: flex; justify-content: center; gap: 10px; }
+                    .actions a { margin-top: 0; }
+                    .secondary { background: #334155; }
+                </style>
+            </head>
+            <body>
+                <div class="box">
+                    <h1>Pago completado</h1>
+                    <p>La transacción <strong><t t-esc="order_id"/></strong> fue pagada exitosamente.</p>
+                    <div class="actions">
+                        <a href="/surpay/new-sale">Iniciar nueva venta</a>
+                        <a class="secondary" t-att-href="odoo_return_url">Volver</a>
+                    </div>
+                </div>
+            </body>
+        </html>
+    </template>
+
+    <template id="new_sale_failed_page" name="Surpay New Sale Failed">
+        <html>
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Pago No Completado</title>
+                <style>
+                    body { font-family: "Segoe UI", Tahoma, sans-serif; background: #faf4f4; margin: 0; }
+                    .box { max-width: 560px; margin: 70px auto; background: #fff; border: 1px solid #efd0d0; border-radius: 14px; padding: 24px; text-align: center; }
+                    h1 { color: #991b1b; margin-top: 0; }
+                    a { display: inline-block; margin-top: 14px; padding: 10px 14px; background: #991b1b; color: #fff; border-radius: 8px; text-decoration: none; }
+                    .actions { margin-top: 18px; display: flex; justify-content: center; gap: 10px; }
+                    .actions a { margin-top: 0; }
+                    .secondary { background: #334155; }
+                </style>
+            </head>
+            <body>
+                <div class="box">
+                    <h1>Pago no completado</h1>
+                    <p>La transacción <strong><t t-esc="order_id"/></strong> terminó con estado <strong><t t-esc="state"/></strong>.</p>
+                    <div class="actions">
+                        <a href="/surpay/new-sale">Intentar nueva venta</a>
+                        <a class="secondary" t-att-href="odoo_return_url">Volver</a>
+                    </div>
+                </div>
+            </body>
+        </html>
+    </template>
+</odoo>

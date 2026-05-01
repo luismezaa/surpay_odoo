@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="surpay_payment_transaction_list" model="ir.ui.view">
+        <field name="name">surpay.payment.transaction.list</field>
+        <field name="model">surpay.payment.transaction</field>
+        <field name="arch" type="xml">
+            <list string="Sales Panel" create="0" edit="0" delete="0">
+                <field name="create_date" string="Created"/>
+                <field name="order_id"/>
+                <field name="external_order_id"/>
+                <field name="state"/>
+                <field name="sales_channel"/>
+                <field name="partner_id"/>
+                <field name="client_id"/>
+                <field name="provider"/>
+                <field name="amount"/>
+                <field name="currency"/>
+                <field name="transferred"/>
+                <field name="cash_closure_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="surpay_payment_transaction_form" model="ir.ui.view">
+        <field name="name">surpay.payment.transaction.form</field>
+        <field name="model">surpay.payment.transaction</field>
+        <field name="arch" type="xml">
+            <form string="Sale Detail" create="0" delete="0">
+                <sheet>
+                    <group>
+                        <group string="Transaction">
+                            <field name="order_id" readonly="1"/>
+                            <field name="external_order_id" readonly="1"/>
+                            <field name="provider" readonly="1"/>
+                            <field name="provider_payment_id" readonly="1"/>
+                            <field name="state" readonly="1"/>
+                        </group>
+                        <group string="Sale Metadata">
+                            <field name="sales_channel" readonly="1"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="client_id" readonly="1"/>
+                            <field name="seller_user_id" readonly="1"/>
+                            <field name="concept" readonly="1"/>
+                            <field name="customer_email" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Amounts">
+                            <field name="amount" readonly="1"/>
+                            <field name="currency" readonly="1"/>
+                        </group>
+                        <group string="Settlement">
+                            <field name="transferred" readonly="1"/>
+                            <field name="cash_closure_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Provider Raw">
+                        <field name="provider_raw" readonly="1" widget="json"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="surpay_payment_transaction_search" model="ir.ui.view">
+        <field name="name">surpay.payment.transaction.search</field>
+        <field name="model">surpay.payment.transaction</field>
+        <field name="arch" type="xml">
+            <search string="Sales Panel">
+                <field name="order_id"/>
+                <field name="external_order_id"/>
+                <field name="partner_id"/>
+                <field name="client_id"/>
+                <field name="sales_channel"/>
+                <field name="provider"/>
+                <field name="state"/>
+                <filter name="paid" string="Paid" domain="[('state', '=', 'paid')]"/>
+                <filter name="pending" string="Pending" domain="[('state', 'in', ['created', 'pending'])]"/>
+                <filter name="failed" string="Failed" domain="[('state', 'in', ['failed', 'expired', 'cancelled'])]"/>
+                <filter name="internal" string="Internal" domain="[('sales_channel', '=', 'internal')]"/>
+                <filter name="external" string="External" domain="[('sales_channel', '=', 'external')]"/>
+                <filter name="not_transferred" string="Not Settled" domain="[('transferred', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="surpay_payment_transaction_action" model="ir.actions.act_window">
+        <field name="name">Sales Panel</field>
+        <field name="res_model">surpay.payment.transaction</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="surpay_menu_root" model="ir.ui.menu">
+        <field name="action" ref="surpay_payment_transaction_action"/>
+    </record>
+
+    <menuitem
+        id="surpay_payment_transaction_menu"
+        name="Sales Panel"
+        parent="surpay_menu_root"
+        action="surpay_payment_transaction_action"
+        sequence="3"
+    />
+</odoo>
