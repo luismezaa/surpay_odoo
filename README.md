@@ -46,6 +46,13 @@ Copia `.env.example` como `.env` y ajusta valores:
 - `LOG_MAX_FILE`
 - `BACKUP_RETENTION_DAYS`
 
+Ademas, antes de desplegar ajusta secretos en archivos de config:
+
+- `config/odoo.dev.conf`: `surpay_encryption_key`, `admin_passwd`, `db_password`
+- `config/odoo.prod.conf`: `surpay_encryption_key`, `admin_passwd`, `db_password`
+
+No commitees secretos reales. Este repositorio incluye placeholders para compartir codigo de forma segura.
+
 ## 2) Levantar desarrollo
 
 ```bash

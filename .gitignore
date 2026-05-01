@@ -1,0 +1,21 @@
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Local backups and certificates
+backups/*
+!backups/.gitkeep
+nginx/certs/*
+!nginx/certs/.gitkeep
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Logs
+*.log
