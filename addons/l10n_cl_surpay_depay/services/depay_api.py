@@ -78,10 +78,11 @@ class DepayApiService(models.AbstractModel):
                 cfg["base_url"] = cfg["base_url"].replace("stage.api.payments.depay.us", "api.payments.depay.us")
 
         _logger.info(
-            "[DEPAY][_assert_config] FINAL: api_key=%s... customer_uuid=%s base_url=%s",
+            "[DEPAY][_assert_config] FINAL: api_key=%s... customer_uuid=%s base_url=%s pos_id=%s",
             (cfg.get("api_key") or "")[:12],
             (cfg.get("customer_uuid") or "")[:8],
             cfg.get("base_url"),
+            (cfg.get("pos_id") or "")[:8],
         )
         if not cfg["api_key"]:
             raise ValidationError("Missing Depay API key configuration.")
@@ -111,8 +112,23 @@ class DepayApiService(models.AbstractModel):
     def create_qr(self, payload, provider_config=None):
         cfg = self._assert_config(provider_config=provider_config)
         payload = dict(payload or {})
-        if not payload.get("pos_external_reference") and cfg.get("pos_id"):
-            payload["pos_external_reference"] = cfg["pos_id"]
+        pos_external_reference = payload.get("pos_external_reference")
+        if not pos_external_reference:
+            pos_external_reference = cfg.get("pos_id")
+
+        # Last fallback: read directly from provider credentials when available.
+        if not pos_external_reference and provider_config:
+            creds = provider_config.get_credentials()
+            pos_external_reference = creds.get("pos_id")
+
+        if pos_external_reference:
+            payload["pos_external_reference"] = pos_external_reference
+        else:
+            _logger.warning(
+                "[DEPAY][create_qr] Missing pos_external_reference (cfg.pos_id empty). Provider id=%s env=%s",
+                provider_config.id if provider_config else None,
+                provider_config.environment if provider_config else None,
+            )
 
         token = self._get_token(cfg)
         headers = {
