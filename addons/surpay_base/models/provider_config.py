@@ -102,6 +102,23 @@ class SurpayProviderConfig(models.Model):
         ),
     ]
 
+    @api.constrains("state", "provider")
+    def _check_single_active_per_provider(self):
+        for record in self:
+            if record.state == "active":
+                duplicate = self.search([
+                    ("provider", "=", record.provider),
+                    ("state", "=", "active"),
+                    ("id", "!=", record.id),
+                ], limit=1)
+                if duplicate:
+                    raise ValidationError(_(
+                        "El proveedor '%s' ya tiene una configuracion activa (%s). "
+                        "Desactívala antes de activar otra.",
+                        dict(self.PROVIDERS).get(record.provider, record.provider),
+                        dict(self.ENVIRONMENTS).get(duplicate.environment, duplicate.environment),
+                    ))
+
     @staticmethod
     def _get_encryption_key():
         """Get or create encryption key from Odoo config."""
