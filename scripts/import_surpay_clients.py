@@ -133,3 +133,7 @@ print(f"[IMPORT] Usuarios actualizados: {updated_users}")
 print(f"[IMPORT] Partners creados: {created_partners}")
 print(f"[IMPORT] Filas omitidas: {skipped_rows}")
 print("=" * 72)
+
+# En odoo shell los cambios pueden quedar sin persistir si no se confirma la transaccion.
+env.cr.commit()
+print("[IMPORT] COMMIT OK")
