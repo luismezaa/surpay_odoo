@@ -355,6 +355,7 @@
             <body>
                 <div class="box">
                     <h1>Pago completado</h1>
+                    <p t-if="concept">Concepto: <strong><t t-esc="concept"/></strong></p>
                     <p>La transacción <strong><t t-esc="order_id"/></strong> fue pagada exitosamente.</p>
                     <div class="actions">
                         <a href="/surpay/new-sale">Iniciar nueva venta</a>

@@ -261,10 +261,12 @@ class SurpayInternalSaleController(http.Controller):
 
     @http.route("/surpay/new-sale/success/<string:order_id>", type="http", auth="user", methods=["GET"], csrf=False)
     def new_sale_success(self, order_id, **kwargs):
+        tx = request.env["surpay.payment.transaction"].sudo().search([("order_id", "=", order_id)], limit=1)
         return request.render(
             "surpay_base.new_sale_success_page",
             {
                 "order_id": order_id,
+                "concept": tx.concept if tx else "",
                 "odoo_return_url": self._odoo_return_url(),
             },
         )
