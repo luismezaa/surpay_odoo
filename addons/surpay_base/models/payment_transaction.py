@@ -3,7 +3,7 @@ from odoo import fields, models
 
 class SurpayPaymentTransaction(models.Model):
     _name = "surpay.payment.transaction"
-    _description = "Surpay Payment Transaction"
+    _description = "Transaccion de pago Surpay"
     _order = "id desc"
 
     order_id = fields.Char(required=True, index=True)
@@ -13,12 +13,12 @@ class SurpayPaymentTransaction(models.Model):
     provider_payment_id = fields.Char(index=True)
     state = fields.Selection(
         selection=[
-            ("created", "Created"),
-            ("pending", "Pending"),
-            ("paid", "Paid"),
-            ("failed", "Failed"),
-            ("expired", "Expired"),
-            ("cancelled", "Cancelled"),
+            ("created", "Creada"),
+            ("pending", "Pendiente"),
+            ("paid", "Pagada"),
+            ("failed", "Fallida"),
+            ("expired", "Expirada"),
+            ("cancelled", "Cancelada"),
         ],
         required=True,
         default="created",
@@ -30,7 +30,7 @@ class SurpayPaymentTransaction(models.Model):
     customer_email = fields.Char()
     partner_id = fields.Many2one("res.partner", ondelete="set null", index=True)
     sales_channel = fields.Selection(
-        selection=[("external", "External"), ("internal", "Internal")],
+        selection=[("external", "Externo"), ("internal", "Interno")],
         default="external",
         required=True,
         index=True,
@@ -42,5 +42,5 @@ class SurpayPaymentTransaction(models.Model):
     provider_raw = fields.Json()
 
     _sql_constraints = [
-        ("surpay_payment_transaction_order_uniq", "unique(order_id)", "order_id must be unique."),
+        ("surpay_payment_transaction_order_uniq", "unique(order_id)", "El order_id debe ser unico."),
     ]

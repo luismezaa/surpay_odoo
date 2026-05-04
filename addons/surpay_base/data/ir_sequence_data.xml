@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <record id="seq_surpay_cash_closure" model="ir.sequence">
-        <field name="name">Surpay Cash Closure</field>
+        <field name="name">Surpay Cierre de caja</field>
         <field name="code">surpay.cash.closure</field>
         <field name="prefix">CC/%(year)s/</field>
         <field name="padding">5</field>

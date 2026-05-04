@@ -5,7 +5,7 @@
         <field name="name">surpay.provider.config.list</field>
         <field name="model">surpay.provider.config</field>
         <field name="arch" type="xml">
-            <list string="Provider Configurations">
+            <list string="Configuraciones de proveedor">
                 <field name="provider" />
                 <field name="environment" />
                 <field name="state" />
@@ -20,23 +20,23 @@
         <field name="name">surpay.provider.config.form</field>
         <field name="model">surpay.provider.config</field>
         <field name="arch" type="xml">
-            <form string="Provider Configuration">
+            <form string="Configuracion de proveedor">
                 <header>
                     <button
                         name="action_test_connection"
                         type="object"
-                        string="🔗 Test Connection"
+                        string="🔗 Probar conexion"
                         class="btn-primary"
                     />
                     <field name="state" widget="statusbar" options="{'clickable': True}" />
                 </header>
                 <sheet>
                     <group>
-                        <group string="Provider Details">
+                        <group string="Datos del proveedor">
                             <field name="provider" />
                             <field name="environment" />
                         </group>
-                        <group string="Metadata">
+                        <group string="Metadatos">
                             <field name="create_date" />
                             <field name="create_uid" />
                             <field name="write_date" />
@@ -47,19 +47,19 @@
 
                     <notebook>
                         <!-- Depay Specific Credentials -->
-                        <page string="Credentials" name="credentials">
+                        <page string="Credenciales" name="credentials">
                             <group>
-                                <field name="api_key" password="True" help="Provider API Key (stored encrypted)" />
-                                <field name="customer_uuid" password="True" help="Customer UUID for provider (stored encrypted)" />
-                                <field name="pos_id" password="True" help="Point of Sale ID (stored encrypted)" />
-                                <field name="webhook_secret" password="True" help="Webhook Secret (stored encrypted)" />
-                                <field name="base_url" password="True" help="Base URL for provider API (stored encrypted)" />
-                                <field name="webhook_url" help="Webhook URL for receiving provider callbacks" />
+                                <field name="api_key" password="True" help="API Key del proveedor (guardada cifrada)" />
+                                <field name="customer_uuid" password="True" help="Customer UUID del proveedor (guardado cifrado)" />
+                                <field name="pos_id" password="True" help="ID de punto de venta (guardado cifrado)" />
+                                <field name="webhook_secret" password="True" help="Secreto webhook (guardado cifrado)" />
+                                <field name="base_url" password="True" help="URL base del API (guardada cifrada)" />
+                                <field name="webhook_url" help="URL webhook para recibir callbacks del proveedor" />
                             </group>
                         </page>
 
                         <!-- Notes -->
-                        <page string="Notes" name="notes">
+                        <page string="Notas" name="notes">
                             <field name="notes" nolabel="1" />
                         </page>
                     </notebook>
@@ -73,28 +73,28 @@
         <field name="name">surpay.provider.config.search</field>
         <field name="model">surpay.provider.config</field>
         <field name="arch" type="xml">
-            <search string="Provider Configurations">
+            <search string="Configuraciones de proveedor">
                 <field name="provider" />
                 <field name="environment" />
-                <filter name="active_configs" string="Active" domain="[('state', '=', 'active')]" />
+                <filter name="active_configs" string="Activas" domain="[('state', '=', 'active')]" />
                 <filter name="sandbox" string="Sandbox" domain="[('environment', '=', 'sandbox')]" />
-                <filter name="production" string="Production" domain="[('environment', '=', 'production')]" />
+                <filter name="production" string="Produccion" domain="[('environment', '=', 'production')]" />
             </search>
         </field>
     </record>
 
     <!-- Action -->
     <record id="surpay_provider_config_action" model="ir.actions.act_window">
-        <field name="name">Payment Provider Configuration</field>
+        <field name="name">Configuracion de proveedores de pago</field>
         <field name="res_model">surpay.provider.config</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
-                Create a new payment provider configuration
+                Crea una nueva configuracion de proveedor de pago
             </p>
             <p>
-                Configure credentials for each payment provider (Depay, Klap, etc.).
-                Credentials are encrypted and stored securely in the database.
+                Configura credenciales para cada proveedor de pago (Depay, Klap, etc.).
+                Las credenciales se cifran y se almacenan de forma segura en la base de datos.
             </p>
         </field>
     </record>
@@ -109,7 +109,7 @@
     <!-- Menu Item -->
     <menuitem
         id="surpay_provider_config_menu"
-        name="Provider Configuration"
+        name="Configuracion de proveedor"
         parent="surpay_menu_root"
         action="surpay_provider_config_action"
         groups="surpay_base.group_surpay_manager,base.group_system"

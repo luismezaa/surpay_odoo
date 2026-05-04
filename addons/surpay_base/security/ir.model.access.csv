@@ -1,10 +1,10 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_surpay_api_client_system,surpay.api.client system,model_surpay_api_client,base.group_system,1,1,1,1
 access_surpay_provider_config_system,surpay.provider.config system,model_surpay_provider_config,base.group_system,1,1,1,1
-access_surpay_provider_config_user,surpay.provider.config user,model_surpay_provider_config,base.group_user,1,1,1,0
+access_surpay_provider_config_user,surpay.provider.config user,model_surpay_provider_config,surpay_base.group_surpay_manager,1,1,1,0
 access_surpay_payment_transaction_system,surpay.payment.transaction system,model_surpay_payment_transaction,base.group_system,1,1,1,1
 access_surpay_payment_transaction_user,surpay.payment.transaction user,model_surpay_payment_transaction,base.group_user,1,0,0,0
 access_surpay_payment_transaction_manager,surpay.payment.transaction manager,model_surpay_payment_transaction,surpay_base.group_surpay_manager,1,1,0,0
 access_surpay_payment_event_system,surpay.payment.event system,model_surpay_payment_event,base.group_system,1,1,1,1
 access_surpay_cash_closure_system,surpay.cash.closure system,model_surpay_cash_closure,base.group_system,1,1,1,1
-access_surpay_cash_closure_user,surpay.cash.closure user,model_surpay_cash_closure,base.group_user,1,1,1,0
+access_surpay_cash_closure_user,surpay.cash.closure user,model_surpay_cash_closure,surpay_base.group_surpay_manager,1,1,1,0

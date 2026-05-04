@@ -14,15 +14,15 @@ _logger = logging.getLogger(__name__)
 
 class SurpayPaymentEvent(models.Model):
     _name = "surpay.payment.event"
-    _description = "Surpay Payment Event"
+    _description = "Evento de pago Surpay"
     _order = "id desc"
 
     transaction_id = fields.Many2one("surpay.payment.transaction", ondelete="cascade", index=True)
     source = fields.Selection(
         selection=[
-            ("provider", "Provider"),
-            ("internal", "Internal"),
-            ("outbound_webhook", "Outbound Webhook"),
+            ("provider", "Proveedor"),
+            ("internal", "Interno"),
+            ("outbound_webhook", "Webhook saliente"),
         ],
         required=True,
     )
@@ -81,7 +81,7 @@ class SurpayPaymentEvent(models.Model):
                 {
                     "is_final": True,
                     "processing_status": "error",
-                    "message": f"Final delivery failure after retries: {error_message}",
+                    "message": f"Falla final de entrega tras reintentos: {error_message}",
                     "next_retry_at": False,
                 }
             )
@@ -115,7 +115,7 @@ class SurpayPaymentEvent(models.Model):
                     {
                         "is_final": True,
                         "processing_status": "error",
-                        "message": "Missing transaction reference for outbound webhook delivery.",
+                        "message": "Falta referencia de transaccion para entrega de webhook saliente.",
                         "next_retry_at": False,
                     }
                 )
@@ -152,7 +152,7 @@ class SurpayPaymentEvent(models.Model):
                         {
                             "processing_status": "ok",
                             "is_final": True,
-                            "message": f"Delivered successfully status={response.status_code}",
+                            "message": f"Entrega exitosa status={response.status_code}",
                             "next_retry_at": False,
                         }
                     )
@@ -172,7 +172,7 @@ class SurpayPaymentEvent(models.Model):
                 "payload": payload,
                 "signature_valid": True,
                 "processing_status": "error",
-                "message": "Delivery scheduled.",
+                "message": "Entrega programada.",
                 "retry_count": 0,
                 "retry_deadline_at": fields.Datetime.now() + timedelta(days=1),
                 "next_retry_at": fields.Datetime.now(),

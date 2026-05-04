@@ -1,23 +1,23 @@
 import uuid
 from datetime import timedelta
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
 
 class SurpayPaymentIntent(models.Model):
     _name = "surpay.payment.intent"
-    _description = "Surpay Payment Intent"
+    _description = "Intento de pago Surpay"
     _order = "id desc"
 
     state = fields.Selection(
         selection=[
-            ("created", "Created"),
-            ("pending", "Pending"),
-            ("paid", "Paid"),
-            ("failed", "Failed"),
-            ("expired", "Expired"),
-            ("cancelled", "Cancelled"),
+            ("created", "Creado"),
+            ("pending", "Pendiente"),
+            ("paid", "Pagado"),
+            ("failed", "Fallido"),
+            ("expired", "Expirado"),
+            ("cancelled", "Cancelado"),
         ],
         required=True,
         default="created",
@@ -38,7 +38,7 @@ class SurpayPaymentIntent(models.Model):
     currency = fields.Char(required=True)
     idempotency_key = fields.Char(required=True, index=True)
     source_channel = fields.Selection(
-        selection=[("external", "External"), ("internal", "Internal")],
+        selection=[("external", "Externo"), ("internal", "Interno")],
         required=True,
         default="external",
         index=True,
@@ -56,11 +56,11 @@ class SurpayPaymentIntent(models.Model):
     transaction_id = fields.Many2one("surpay.payment.transaction", ondelete="set null", index=True)
 
     _sql_constraints = [
-        ("surpay_payment_order_uniq", "unique(order_id)", "order_id must be unique."),
+        ("surpay_payment_order_uniq", "unique(order_id)", "El order_id debe ser unico."),
         (
             "surpay_payment_idempotency_uniq",
             "unique(client_id, idempotency_key)",
-            "idempotency_key must be unique by client.",
+            "El idempotency_key debe ser unico por cliente.",
         ),
     ]
 
@@ -81,7 +81,7 @@ class SurpayPaymentIntent(models.Model):
         try:
             seconds = int(value)
         except ValueError as exc:
-            raise ValidationError("Invalid default expiration seconds configuration.") from exc
+            raise ValidationError(_("Configuracion invalida de segundos de expiracion por defecto.")) from exc
 
         return max(300, min(seconds, 3600))
 

@@ -1,12 +1,12 @@
 import ipaddress
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
 
 class SurpayApiClient(models.Model):
     _name = "surpay.api.client"
-    _description = "Surpay External API Client"
+    _description = "Cliente API externo de Surpay"
 
     name = fields.Char(required=True)
     active = fields.Boolean(default=True)
@@ -16,39 +16,39 @@ class SurpayApiClient(models.Model):
     webhook_secret = fields.Char()
     partner_id = fields.Many2one(
         "res.partner",
-        string="Associated Partner",
+        string="Contacto asociado",
         ondelete="set null",
         index=True,
-        help="Partner used to tag sales created with this API client.",
+        help="Contacto usado para etiquetar ventas creadas con este cliente API.",
     )
     ip_filter_mode = fields.Selection(
-        selection=[("all", "All IPs"), ("list", "Allow List")],
+        selection=[("all", "Todas las IPs"), ("list", "Lista permitida")],
         default="all",
         required=True,
-        help="Choose 'All IPs' to allow any origin, or 'Allow List' to restrict access.",
+        help="Elige 'Todas las IPs' para permitir cualquier origen, o 'Lista permitida' para restringir acceso.",
     )
     allowed_ips = fields.Text(
-        help="Allowed IPs or CIDRs (one per line or comma separated). Example: 192.168.1.10, 10.0.0.0/24",
+        help="IPs o CIDRs permitidos (uno por linea o separados por coma). Ejemplo: 192.168.1.10, 10.0.0.0/24",
     )
 
     # Defaults used when request payload omits these fields.
-    default_local_currency = fields.Char(default="ARS", help="ISO 4217 currency code, e.g. ARS")
-    default_local_country = fields.Char(default="AR", help="ISO 3166-1 alpha-2 country code, e.g. AR")
-    default_qr_from = fields.Char(default="AR", help="ISO 3166-1 alpha-2 origin country code, e.g. AR")
+    default_local_currency = fields.Char(default="ARS", help="Codigo de moneda ISO 4217, p. ej. ARS")
+    default_local_country = fields.Char(default="AR", help="Codigo de pais ISO 3166-1 alpha-2, p. ej. AR")
+    default_qr_from = fields.Char(default="AR", help="Codigo de pais de origen ISO 3166-1 alpha-2, p. ej. AR")
 
     _sql_constraints = [
-        ("surpay_api_client_id_uniq", "unique(client_id)", "client_id must be unique."),
+        ("surpay_api_client_id_uniq", "unique(client_id)", "El client_id debe ser unico."),
     ]
 
     @api.constrains("default_local_currency", "default_local_country", "default_qr_from")
     def _check_default_codes(self):
         for rec in self:
             if rec.default_local_currency and len(rec.default_local_currency.strip()) != 3:
-                raise ValidationError("default_local_currency must be a 3-letter ISO 4217 code.")
+                raise ValidationError(_("default_local_currency debe tener 3 letras (ISO 4217)."))
             if rec.default_local_country and len(rec.default_local_country.strip()) != 2:
-                raise ValidationError("default_local_country must be a 2-letter ISO 3166-1 alpha-2 code.")
+                raise ValidationError(_("default_local_country debe tener 2 letras (ISO 3166-1 alpha-2)."))
             if rec.default_qr_from and len(rec.default_qr_from.strip()) != 2:
-                raise ValidationError("default_qr_from must be a 2-letter ISO 3166-1 alpha-2 code.")
+                raise ValidationError(_("default_qr_from debe tener 2 letras (ISO 3166-1 alpha-2)."))
 
     def _iter_allowed_ip_rules(self):
         self.ensure_one()

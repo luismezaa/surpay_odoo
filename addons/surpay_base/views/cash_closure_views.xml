@@ -4,7 +4,7 @@
         <field name="name">surpay.cash.closure.list</field>
         <field name="model">surpay.cash.closure</field>
         <field name="arch" type="xml">
-            <list string="Cash Closures">
+            <list string="Cierres de caja">
                 <field name="name"/>
                 <field name="closure_date"/>
                 <field name="state"/>
@@ -24,22 +24,22 @@
         <field name="name">surpay.cash.closure.form</field>
         <field name="model">surpay.cash.closure</field>
         <field name="arch" type="xml">
-            <form string="Cash Closure">
+            <form string="Cierre de caja">
                 <header>
-                    <button name="action_load_transactions" type="object" string="Load Transactions" class="btn-secondary" invisible="state != 'draft'"/>
-                    <button name="action_close_cash" type="object" string="Close Cash" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_load_transactions" type="object" string="Cargar transacciones" class="btn-secondary" invisible="state != 'draft'"/>
+                    <button name="action_close_cash" type="object" string="Cerrar caja" class="btn-primary" invisible="state != 'draft'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,closed"/>
                 </header>
                 <sheet>
                     <group>
-                        <group string="Closure Info">
+                        <group string="Informacion del cierre">
                             <field name="name" readonly="1"/>
                             <field name="closure_date" readonly="state == 'closed'"/>
                             <field name="client_id" readonly="state == 'closed'"/>
                             <field name="seller_user_id" readonly="state == 'closed'"/>
                             <field name="user_id" readonly="1"/>
                         </group>
-                        <group string="Filters">
+                        <group string="Filtros">
                             <field name="provider" readonly="state == 'closed'"/>
                             <field name="sales_channel" readonly="state == 'closed'"/>
                             <field name="transaction_count" readonly="1"/>
@@ -50,10 +50,10 @@
                         </group>
                     </group>
 
-                    <group string="Transactions Included">
+                    <group string="Transacciones incluidas">
                         <field name="transaction_ids" readonly="state == 'closed'">
                             <list create="0" delete="0" editable="bottom">
-                                <field name="create_date" string="Created" readonly="1"/>
+                                <field name="create_date" string="Creada" readonly="1"/>
                                 <field name="order_id" readonly="1"/>
                                 <field name="concept" readonly="1"/>
                                 <field name="state" readonly="1"/>
@@ -76,7 +76,7 @@
         <field name="name">surpay.cash.closure.search</field>
         <field name="model">surpay.cash.closure</field>
         <field name="arch" type="xml">
-            <search string="Cash Closures">
+            <search string="Cierres de caja">
                 <field name="name"/>
                 <field name="closure_date"/>
                 <field name="client_id"/>
@@ -84,22 +84,22 @@
                 <field name="user_id"/>
                 <field name="sales_channel"/>
                 <field name="provider"/>
-                <filter name="today" string="Today" domain="[('closure_date', '=', context_today())]"/>
-                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                <filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+                <filter name="today" string="Hoy" domain="[('closure_date', '=', context_today())]"/>
+                <filter name="draft" string="Borrador" domain="[('state', '=', 'draft')]"/>
+                <filter name="closed" string="Cerrado" domain="[('state', '=', 'closed')]"/>
             </search>
         </field>
     </record>
 
     <record id="surpay_cash_closure_action" model="ir.actions.act_window">
-        <field name="name">Cash Closure</field>
+        <field name="name">Cierre de caja</field>
         <field name="res_model">surpay.cash.closure</field>
         <field name="view_mode">list,form</field>
         <field name="context">{'search_default_draft': 1, 'search_default_today': 1}</field>
     </record>
 
     <record id="surpay_cash_closure_open_action" model="ir.actions.server">
-        <field name="name">Cash Closure</field>
+        <field name="name">Cierre de caja</field>
         <field name="model_id" ref="model_surpay_cash_closure"/>
         <field name="state">code</field>
         <field name="code">action = model.action_open_cash_closure()</field>
@@ -107,7 +107,7 @@
 
     <menuitem
         id="surpay_cash_closure_menu"
-        name="Cash Closure"
+        name="Cierre de caja"
         parent="surpay_menu_root"
         action="surpay_cash_closure_open_action"
         groups="surpay_base.group_surpay_manager,base.group_system"

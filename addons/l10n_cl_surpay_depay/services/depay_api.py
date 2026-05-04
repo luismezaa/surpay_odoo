@@ -5,7 +5,7 @@ import logging
 
 import requests
 
-from odoo import models
+from odoo import _, models
 from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ _logger = logging.getLogger(__name__)
 
 class DepayApiService(models.AbstractModel):
     _name = "surpay.depay.api"
-    _description = "Depay API Service"
+    _description = "Servicio API de Depay"
 
     def _config(self):
         params = self.env["ir.config_parameter"].sudo()
@@ -85,7 +85,7 @@ class DepayApiService(models.AbstractModel):
             (cfg.get("pos_id") or "")[:8],
         )
         if not cfg["api_key"]:
-            raise ValidationError("Missing Depay API key configuration.")
+            raise ValidationError(_("Falta configuracion de API key de Depay."))
 
         return cfg
 
@@ -104,7 +104,7 @@ class DepayApiService(models.AbstractModel):
         data = response.json()
         token = data.get("accessToken")
         if not token:
-            raise ValidationError("Depay token response does not include accessToken.")
+            raise ValidationError(_("La respuesta de token de Depay no incluye accessToken."))
 
         _logger.info("[DEPAY][_get_token] token obtained ok (first 20): %s...", token[:20])
         return token
@@ -170,7 +170,7 @@ class DepayApiService(models.AbstractModel):
         if last_error:
             raise last_error
 
-        raise ValidationError("Depay QR endpoint resolution failed.")
+        raise ValidationError(_("No se pudo resolver el endpoint QR de Depay."))
 
     def get_payment_status(self, provider_order_id, provider_config=None):
         cfg = self._assert_config(provider_config=provider_config)

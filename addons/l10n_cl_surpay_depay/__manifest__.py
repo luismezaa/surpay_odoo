@@ -1,6 +1,6 @@
 {
     "name": "Surpay Depay Integration",
-    "summary": "Headless payment orchestration for Depay QR",
+    "summary": "Orquestacion de pagos headless para QR Depay",
     "version": "18.0.1.0.0",
     "category": "Accounting/Payment Providers",
     "author": "Surpay",

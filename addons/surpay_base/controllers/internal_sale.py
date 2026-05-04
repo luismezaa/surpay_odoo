@@ -10,8 +10,8 @@ class SurpayInternalSaleController(http.Controller):
 
     def _odoo_return_url(self):
         """Build a stable backend URL to avoid returning to the last act_url state."""
-        menu = request.env.ref("surpay_base.surpay_provider_config_menu", raise_if_not_found=False)
-        action = request.env.ref("surpay_base.surpay_provider_config_action", raise_if_not_found=False)
+        menu = request.env.ref("surpay_base.surpay_payment_transaction_menu", raise_if_not_found=False)
+        action = request.env.ref("surpay_base.surpay_payment_transaction_action", raise_if_not_found=False)
         if menu and action:
             return f"/web#menu_id={menu.id}&action={action.id}"
         return "/web"

@@ -5,14 +5,14 @@ from odoo import api, fields, models
 
 class SurpayApiNonce(models.Model):
     _name = "surpay.api.nonce"
-    _description = "Surpay API Nonce"
+    _description = "Nonce de API Surpay"
 
     client_id = fields.Many2one("surpay.api.client", required=True, ondelete="cascade", index=True)
     nonce = fields.Char(required=True)
     expires_at = fields.Datetime(required=True, index=True)
 
     _sql_constraints = [
-        ("surpay_nonce_client_uniq", "unique(client_id, nonce)", "Nonce already used for this client."),
+        ("surpay_nonce_client_uniq", "unique(client_id, nonce)", "El nonce ya fue usado para este cliente."),
     ]
 
     @api.model

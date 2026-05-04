@@ -1,31 +1,31 @@
 from datetime import datetime, time, timedelta
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
 class SurpayCashClosure(models.Model):
     _name = "surpay.cash.closure"
-    _description = "Surpay Cash Closure"
+    _description = "Cierre de caja Surpay"
     _order = "id desc"
 
     name = fields.Char(default="New", required=True, copy=False)
     state = fields.Selection(
-        selection=[("draft", "Draft"), ("closed", "Closed")],
+        selection=[("draft", "Borrador"), ("closed", "Cerrado")],
         default="draft",
         required=True,
         index=True,
     )
     user_id = fields.Many2one("res.users", required=True, default=lambda self: self.env.user, ondelete="restrict")
-    seller_user_id = fields.Many2one("res.users", string="Seller", index=True, ondelete="set null")
-    client_id = fields.Many2one("surpay.api.client", string="Client", required=True, ondelete="restrict", index=True)
+    seller_user_id = fields.Many2one("res.users", string="Vendedor", index=True, ondelete="set null")
+    client_id = fields.Many2one("surpay.api.client", string="Cliente API", required=True, ondelete="restrict", index=True)
     closure_date = fields.Date(required=True, default=fields.Date.context_today, index=True)
     date_from = fields.Datetime(required=True, default=lambda self: fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
     date_to = fields.Datetime(required=True, default=fields.Datetime.now)
     provider = fields.Char(help="Optional provider filter, e.g. depay")
     sales_channel = fields.Selection(
-        selection=[("external", "External"), ("internal", "Internal")],
-        help="Optional channel filter for closure.",
+        selection=[("external", "Externo"), ("internal", "Interno")],
+        help="Filtro opcional de canal para el cierre.",
     )
 
     transaction_ids = fields.One2many("surpay.payment.transaction", "cash_closure_id", string="Transactions")
@@ -135,14 +135,30 @@ class SurpayCashClosure(models.Model):
                 limit=1,
             )
             if not closure:
-                closure = self.sudo().create(
-                    {
-                        "user_id": seller_user_id or self.env.user.id,
-                        "seller_user_id": seller_user_id,
-                        "client_id": client_id,
-                        "closure_date": day,
-                    }
+                # If the box was already closed for the day and new paid sales arrived,
+                # reopen the same closure so transfer tracking continues in one header.
+                closed_closure = self.sudo().search(
+                    [
+                        ("state", "=", "closed"),
+                        ("closure_date", "=", day),
+                        ("client_id", "=", client_id),
+                        ("seller_user_id", "=", seller_user_id),
+                    ],
+                    order="id desc",
+                    limit=1,
                 )
+                if closed_closure:
+                    closed_closure.state = "draft"
+                    closure = closed_closure
+                else:
+                    closure = self.sudo().create(
+                        {
+                            "user_id": seller_user_id or self.env.user.id,
+                            "seller_user_id": seller_user_id,
+                            "client_id": client_id,
+                            "closure_date": day,
+                        }
+                    )
 
             unassigned = tx_group.filtered(lambda t: not t.cash_closure_id)
             if unassigned:
@@ -165,21 +181,19 @@ class SurpayCashClosure(models.Model):
     def action_load_transactions(self):
         for rec in self:
             if rec.state != "draft":
-                raise UserError("Only draft closures can load transactions.")
+                raise UserError(_("Solo los cierres en borrador pueden cargar transacciones."))
             txs = self.env["surpay.payment.transaction"].sudo().search(rec._build_tx_domain())
             txs.write({"cash_closure_id": rec.id})
 
     def action_close_cash(self):
         for rec in self:
             if rec.state != "draft":
-                raise UserError("This closure is already closed.")
+                raise UserError(_("Este cierre ya esta cerrado."))
             if not rec.transaction_ids:
                 rec.action_load_transactions()
             if not rec.transaction_ids:
-                raise UserError("No paid transactions available for closure in the selected range.")
+                raise UserError(_("No hay transacciones pagadas disponibles para cerrar en el rango seleccionado."))
             pending = rec.transaction_ids.filtered(lambda t: not t.transferred)
             if pending:
-                raise UserError(
-                    "There are pending transactions not marked as transferred. Mark each detail before closing the cash closure."
-                )
+                raise UserError(_("Hay transacciones pendientes sin marcar como transferidas. Marca cada detalle antes de cerrar la caja."))
             rec.state = "closed"

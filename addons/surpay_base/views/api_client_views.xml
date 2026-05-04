@@ -4,7 +4,7 @@
         <field name="name">surpay.api.client.list</field>
         <field name="model">surpay.api.client</field>
         <field name="arch" type="xml">
-            <list string="API Clients">
+            <list string="Clientes API">
                 <field name="name"/>
                 <field name="client_id"/>
                 <field name="partner_id"/>
@@ -21,10 +21,10 @@
         <field name="name">surpay.api.client.form</field>
         <field name="model">surpay.api.client</field>
         <field name="arch" type="xml">
-            <form string="API Client">
+            <form string="Cliente API">
                 <sheet>
                     <group>
-                        <group string="Client Access">
+                        <group string="Acceso del cliente">
                             <field name="name"/>
                             <field name="active"/>
                             <field name="client_id"/>
@@ -33,17 +33,17 @@
                             <field name="webhook_url"/>
                             <field name="webhook_secret" password="True"/>
                         </group>
-                        <group string="QR Defaults">
+                        <group string="Valores por defecto QR">
                             <field name="default_local_currency" placeholder="ARS"/>
                             <field name="default_local_country" placeholder="AR"/>
                             <field name="default_qr_from" placeholder="AR"/>
                         </group>
                     </group>
-                    <group string="IP Restriction">
+                    <group string="Restriccion por IP">
                         <field name="ip_filter_mode"/>
                         <field
                             name="allowed_ips"
-                            placeholder="all is handled by mode=All IPs. For allow list: 192.168.1.10, 10.0.0.0/24"
+                            placeholder="all se maneja con modo=Todas las IPs. Para lista permitida: 192.168.1.10, 10.0.0.0/24"
                             invisible="ip_filter_mode == 'all'"
                         />
                     </group>
@@ -56,26 +56,26 @@
         <field name="name">surpay.api.client.search</field>
         <field name="model">surpay.api.client</field>
         <field name="arch" type="xml">
-            <search string="API Clients">
+            <search string="Clientes API">
                 <field name="name"/>
                 <field name="client_id"/>
                 <field name="partner_id"/>
-                <filter name="active_clients" string="Active" domain="[('active', '=', True)]"/>
-                <filter name="all_ips" string="All IPs" domain="[('ip_filter_mode', '=', 'all')]"/>
-                <filter name="allow_list" string="Allow List" domain="[('ip_filter_mode', '=', 'list')]"/>
+                <filter name="active_clients" string="Activos" domain="[('active', '=', True)]"/>
+                <filter name="all_ips" string="Todas las IPs" domain="[('ip_filter_mode', '=', 'all')]"/>
+                <filter name="allow_list" string="Lista permitida" domain="[('ip_filter_mode', '=', 'list')]"/>
             </search>
         </field>
     </record>
 
     <record id="surpay_api_client_action" model="ir.actions.act_window">
-        <field name="name">API Clients</field>
+        <field name="name">Clientes API</field>
         <field name="res_model">surpay.api.client</field>
         <field name="view_mode">list,form</field>
     </record>
 
     <menuitem
         id="surpay_api_client_menu"
-        name="API Clients"
+        name="Clientes API"
         parent="surpay_menu_root"
         action="surpay_api_client_action"
         sequence="2"

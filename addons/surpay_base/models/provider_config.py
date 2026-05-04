@@ -2,7 +2,7 @@ import base64
 import logging
 import requests
 
-from odoo import fields, models, api
+from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError, UserError
 from cryptography.fernet import Fernet
 
@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class SurpayProviderConfig(models.Model):
     _name = "surpay.provider.config"
-    _description = "Payment Provider Configuration"
+    _description = "Configuracion de proveedor de pagos"
     _rec_name = "display_name"
 
     PROVIDERS = [
@@ -20,59 +20,59 @@ class SurpayProviderConfig(models.Model):
     ]
     ENVIRONMENTS = [
         ("sandbox", "Sandbox"),
-        ("production", "Production"),
+        ("production", "Produccion"),
     ]
 
     provider = fields.Selection(
         selection=PROVIDERS,
         required=True,
         index=True,
-        help="Payment provider",
+        help="Proveedor de pago",
     )
     environment = fields.Selection(
         selection=ENVIRONMENTS,
         required=True,
         default="sandbox",
-        help="Environment: Sandbox for testing, Production for live",
+        help="Entorno: Sandbox para pruebas, Produccion para operacion real",
     )
     state = fields.Selection(
-        selection=[("active", "Active"), ("inactive", "Inactive")],
+        selection=[("active", "Activo"), ("inactive", "Inactivo")],
         default="active",
         required=True,
-        help="Enable/Disable this provider configuration",
+        help="Habilitar o deshabilitar esta configuracion",
     )
 
     # Encrypted credentials
     api_key = fields.Char(
         required=True,
-        help="Provider API Key (encrypted in database)",
+        help="API Key del proveedor (cifrada en base de datos)",
     )
     customer_uuid = fields.Char(
         required=False,
-        help="Customer UUID for provider (encrypted in database)",
+        help="Customer UUID del proveedor (cifrado en base de datos)",
     )
     pos_id = fields.Char(
         required=False,
-        help="Point of Sale ID (encrypted in database)",
+        help="ID de punto de venta (cifrado en base de datos)",
     )
     webhook_secret = fields.Char(
         required=False,
-        help="Webhook Secret for signature verification (encrypted in database)",
+        help="Secreto del webhook para validar firma (cifrado en base de datos)",
     )
     base_url = fields.Char(
         required=False,
-        help="Base URL for provider API (encrypted in database)",
+        help="URL base del API del proveedor (cifrada en base de datos)",
     )
 
     # Non-encrypted
     webhook_url = fields.Char(
         required=False,
-        help="Webhook URL for provider callbacks (not encrypted)",
+        help="URL webhook para callbacks del proveedor (sin cifrar)",
     )
 
     # Metadata
-    notes = fields.Text(help="Internal notes about this configuration")
-    last_test_date = fields.Datetime(readonly=True, help="Last successful test connection")
+    notes = fields.Text(help="Notas internas sobre esta configuracion")
+    last_test_date = fields.Datetime(readonly=True, help="Ultima prueba de conexion exitosa")
     create_date = fields.Datetime(readonly=True)
     create_uid = fields.Many2one("res.users", readonly=True)
     write_date = fields.Datetime(readonly=True)
@@ -88,14 +88,14 @@ class SurpayProviderConfig(models.Model):
     display_name = fields.Char(
         compute="_compute_display_name",
         store=False,
-        help="Display name showing provider and environment",
+        help="Nombre para mostrar con proveedor y entorno",
     )
 
     _sql_constraints = [
         (
             "surpay_provider_config_uniq",
             "unique(provider, environment)",
-            "Only one configuration per provider/environment combination allowed.",
+            "Solo se permite una configuracion por combinacion proveedor/entorno.",
         ),
     ]
 
@@ -166,14 +166,14 @@ class SurpayProviderConfig(models.Model):
         """Validate that required credentials are present for the provider."""
         if self.provider == "depay":
             if not self.api_key:
-                raise ValidationError("Depay API Key is required")
+                raise ValidationError(_("La API Key de Depay es obligatoria"))
             if not self.customer_uuid:
-                raise ValidationError("Depay Customer UUID is required")
+                raise ValidationError(_("El Customer UUID de Depay es obligatorio"))
             if not self.pos_id:
-                raise ValidationError("Depay POS ID is required")
+                raise ValidationError(_("El POS ID de Depay es obligatorio"))
         elif self.provider == "klap":
             if not self.api_key:
-                raise ValidationError("Klap API Key is required")
+                raise ValidationError(_("La API Key de Klap es obligatoria"))
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -232,7 +232,7 @@ class SurpayProviderConfig(models.Model):
             elif self.provider == "klap":
                 self._test_klap_connection(creds)
             else:
-                raise UserError(f"Test connection not implemented for {self.provider}")
+                raise UserError(_("La prueba de conexion no esta implementada para %s") % self.provider)
             
             # Update last test date only if successful
             self.last_test_date = fields.Datetime.now()
@@ -242,8 +242,9 @@ class SurpayProviderConfig(models.Model):
                 "type": "ir.actions.client",
                 "tag": "display_notification",
                 "params": {
-                    "title": "✓ Connection Successful",
-                    "message": f"Provider {self.provider.upper()} ({self.environment}) is responding correctly",
+                    "title": _("Conexion exitosa"),
+                    "message": _("El proveedor %s (%s) responde correctamente")
+                    % (self.provider.upper(), self.environment),
                     "type": "success",
                     "sticky": False,
                 },
@@ -252,15 +253,15 @@ class SurpayProviderConfig(models.Model):
             _logger.warning("Validation failed for %s: %s", self.display_name, str(ve))
             raise
         except requests.exceptions.Timeout:
-            error_msg = f"Connection timeout to {self.provider} API (>20s)"
+            error_msg = _("Tiempo de espera agotado al conectar con API de %s (>20s)") % self.provider
             _logger.exception(error_msg)
             raise UserError(error_msg)
         except requests.exceptions.ConnectionError as e:
-            error_msg = f"Cannot connect to {self.provider} API: {str(e)}"
+            error_msg = _("No se pudo conectar con API de %s: %s") % (self.provider, str(e))
             _logger.exception(error_msg)
             raise UserError(error_msg)
         except Exception as e:
-            error_msg = f"Connection test failed: {str(e)}"
+            error_msg = _("La prueba de conexion fallo: %s") % str(e)
             _logger.exception(error_msg)
             raise UserError(error_msg)
 
@@ -271,7 +272,7 @@ class SurpayProviderConfig(models.Model):
         api_key = (creds.get("api_key") or "").strip()
         customer_uuid = (creds.get("customer_uuid") or "").strip()
         if not api_key:
-            raise ValidationError("Depay API key is required")
+            raise ValidationError(_("La API key de Depay es obligatoria"))
         
         base_url = (creds.get("base_url") or "https://stage.api.payments.depay.us").rstrip("/")
         timeout = 20
@@ -297,9 +298,9 @@ class SurpayProviderConfig(models.Model):
             
             # Status 401 = invalid credentials, 200 = success, 400+ = various errors
             if response.status_code == 401:
-                raise UserError("Invalid API key: 401 Unauthorized")
+                raise UserError(_("API key invalida: 401 Unauthorized"))
             elif response.status_code >= 500:
-                raise UserError(f"Depay API server error: {response.status_code}")
+                raise UserError(_("Error de servidor de API Depay: %s") % response.status_code)
             elif response.status_code >= 400:
                 try:
                     error_data = response.json()
@@ -307,19 +308,20 @@ class SurpayProviderConfig(models.Model):
                 except Exception:
                     error_msg = response.text
                 raise UserError(
-                    f"Depay auth failed [{response.status_code}] on {auth_url}: {error_msg}"
+                    _("Autenticacion Depay fallida [%s] en %s: %s")
+                    % (response.status_code, auth_url, error_msg)
                 )
             
             # Success - validate we got a token
             data = response.json()
             token = data.get("accessToken")
             if not token:
-                raise UserError("API response does not include accessToken")
+                raise UserError(_("La respuesta de API no incluye accessToken"))
             
             _logger.info("Successfully obtained access token (first 20 chars): %s...", token[:20])
             
         except requests.exceptions.RequestException as e:
-            raise UserError(f"HTTP request failed: {str(e)}")
+            raise UserError(_("La solicitud HTTP fallo: %s") % str(e))
 
     def _test_klap_connection(self, creds):
         """Test actual connection to Klap API with provided credentials."""
@@ -327,7 +329,7 @@ class SurpayProviderConfig(models.Model):
         
         api_key = (creds.get("api_key") or "").strip()
         if not api_key:
-            raise ValidationError("Klap API key is required")
+            raise ValidationError(_("La API key de Klap es obligatoria"))
         
         base_url = (creds.get("base_url") or "https://api.klap.com").rstrip("/")
         timeout = 20
@@ -347,18 +349,18 @@ class SurpayProviderConfig(models.Model):
             _logger.info("Klap API response body: %s", response.text[:500])
             
             if response.status_code == 401:
-                raise UserError("Invalid API key: 401 Unauthorized")
+                raise UserError(_("API key invalida: 401 Unauthorized"))
             elif response.status_code >= 500:
-                raise UserError(f"Klap API server error: {response.status_code}")
+                raise UserError(_("Error de servidor de API Klap: %s") % response.status_code)
             elif response.status_code >= 400:
                 try:
                     error_data = response.json()
                     error_msg = error_data.get("message", f"HTTP {response.status_code}")
                 except:
                     error_msg = response.text
-                raise UserError(f"Klap API error: {error_msg}")
+                raise UserError(_("Error de API Klap: %s") % error_msg)
             
             _logger.info("Successfully connected to Klap API")
             
         except requests.exceptions.RequestException as e:
-            raise UserError(f"HTTP request failed: {str(e)}")
+            raise UserError(_("La solicitud HTTP fallo: %s") % str(e))

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="payment_link_page" name="Surpay Payment Link">
+    <template id="payment_link_page" name="Enlace de pago Surpay">
         <html>
             <head>
                 <meta charset="utf-8" />

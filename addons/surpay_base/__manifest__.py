@@ -1,6 +1,6 @@
 {
     "name": "Surpay Base",
-    "summary": "Base configuration module for Surpay integrations",
+    "summary": "Modulo base de configuracion para integraciones Surpay",
     "version": "18.0.1.0.0",
     "category": "Tools",
     "author": "Surpay",

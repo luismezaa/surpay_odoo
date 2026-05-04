@@ -4,8 +4,8 @@
         <field name="name">surpay.payment.transaction.list</field>
         <field name="model">surpay.payment.transaction</field>
         <field name="arch" type="xml">
-            <list string="Sales Panel" create="0" edit="0" delete="0">
-                <field name="create_date" string="Created"/>
+            <list string="Panel de ventas" create="0" edit="0" delete="0">
+                <field name="create_date" string="Creada"/>
                 <field name="order_id"/>
                 <field name="external_order_id"/>
                 <field name="state"/>
@@ -25,17 +25,17 @@
         <field name="name">surpay.payment.transaction.form</field>
         <field name="model">surpay.payment.transaction</field>
         <field name="arch" type="xml">
-            <form string="Sale Detail" create="0" delete="0">
+            <form string="Detalle de venta" create="0" delete="0">
                 <sheet>
                     <group>
-                        <group string="Transaction">
+                        <group string="Transaccion">
                             <field name="order_id" readonly="1"/>
                             <field name="external_order_id" readonly="1"/>
                             <field name="provider" readonly="1"/>
                             <field name="provider_payment_id" readonly="1"/>
                             <field name="state" readonly="1"/>
                         </group>
-                        <group string="Sale Metadata">
+                        <group string="Metadatos de venta">
                             <field name="sales_channel" readonly="1"/>
                             <field name="partner_id" readonly="1"/>
                             <field name="client_id" readonly="1"/>
@@ -45,16 +45,16 @@
                         </group>
                     </group>
                     <group>
-                        <group string="Amounts">
+                        <group string="Montos">
                             <field name="amount" readonly="1"/>
                             <field name="currency" readonly="1"/>
                         </group>
-                        <group string="Settlement">
+                        <group string="Liquidacion">
                             <field name="transferred" readonly="1"/>
                             <field name="cash_closure_id" readonly="1"/>
                         </group>
                     </group>
-                    <group string="Provider Raw">
+                    <group string="Respuesta cruda del proveedor">
                         <field name="provider_raw" readonly="1" widget="json"/>
                     </group>
                 </sheet>
@@ -66,7 +66,7 @@
         <field name="name">surpay.payment.transaction.search</field>
         <field name="model">surpay.payment.transaction</field>
         <field name="arch" type="xml">
-            <search string="Sales Panel">
+            <search string="Panel de ventas">
                 <field name="order_id"/>
                 <field name="external_order_id"/>
                 <field name="partner_id"/>
@@ -74,18 +74,18 @@
                 <field name="sales_channel"/>
                 <field name="provider"/>
                 <field name="state"/>
-                <filter name="paid" string="Paid" domain="[('state', '=', 'paid')]"/>
-                <filter name="pending" string="Pending" domain="[('state', 'in', ['created', 'pending'])]"/>
-                <filter name="failed" string="Failed" domain="[('state', 'in', ['failed', 'expired', 'cancelled'])]"/>
-                <filter name="internal" string="Internal" domain="[('sales_channel', '=', 'internal')]"/>
-                <filter name="external" string="External" domain="[('sales_channel', '=', 'external')]"/>
-                <filter name="not_transferred" string="Not Settled" domain="[('transferred', '=', False)]"/>
+                <filter name="paid" string="Pagadas" domain="[('state', '=', 'paid')]"/>
+                <filter name="pending" string="Pendientes" domain="[('state', 'in', ['created', 'pending'])]"/>
+                <filter name="failed" string="Fallidas" domain="[('state', 'in', ['failed', 'expired', 'cancelled'])]"/>
+                <filter name="internal" string="Internas" domain="[('sales_channel', '=', 'internal')]"/>
+                <filter name="external" string="Externas" domain="[('sales_channel', '=', 'external')]"/>
+                <filter name="not_transferred" string="No transferidas" domain="[('transferred', '=', False)]"/>
             </search>
         </field>
     </record>
 
     <record id="surpay_payment_transaction_action" model="ir.actions.act_window">
-        <field name="name">Sales Panel</field>
+        <field name="name">Panel de ventas</field>
         <field name="res_model">surpay.payment.transaction</field>
         <field name="view_mode">list,form</field>
     </record>
@@ -96,7 +96,7 @@
 
     <menuitem
         id="surpay_payment_transaction_menu"
-        name="Sales Panel"
+        name="Panel de ventas"
         parent="surpay_menu_root"
         action="surpay_payment_transaction_action"
         sequence="3"
