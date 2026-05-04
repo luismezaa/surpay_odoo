@@ -43,7 +43,7 @@ echo "[4/6] Backup previo"
 
 echo "[5/6] Upgrade de modulos: $MODULES"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T odoo \
-  odoo -c /etc/odoo/odoo.conf --stop-after-init -d "$POSTGRES_DB" -u "$MODULES"
+  odoo -c /etc/odoo/odoo.conf --stop-after-init --no-http -d "$POSTGRES_DB" -u "$MODULES"
 
 echo "[6/6] Levantando servicios"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d odoo

@@ -110,6 +110,10 @@ class DepayApiService(models.AbstractModel):
 
     def create_qr(self, payload, provider_config=None):
         cfg = self._assert_config(provider_config=provider_config)
+        payload = dict(payload or {})
+        if not payload.get("pos_external_reference") and cfg.get("pos_id"):
+            payload["pos_external_reference"] = cfg["pos_id"]
+
         token = self._get_token(cfg)
         headers = {
             "Authorization": f"Bearer {token}",
