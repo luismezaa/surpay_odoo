@@ -86,6 +86,16 @@ class SurpayCashClosure(models.Model):
             self._apply_closure_day_bounds(vals)
         return super().write(vals)
 
+    def name_get(self):
+        result = []
+        for rec in self:
+            if rec.closure_date:
+                date_label = fields.Date.to_string(rec.closure_date)
+                result.append((rec.id, f"{rec.name} - {date_label}"))
+            else:
+                result.append((rec.id, rec.name))
+        return result
+
     def _build_tx_domain(self):
         self.ensure_one()
         _, start, end = self._day_window(self.closure_date)
