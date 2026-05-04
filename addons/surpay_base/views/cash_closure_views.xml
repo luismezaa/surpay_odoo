@@ -11,8 +11,6 @@
                 <field name="client_id"/>
                 <field name="seller_user_id"/>
                 <field name="user_id"/>
-                <field name="sales_channel"/>
-                <field name="provider"/>
                 <field name="transaction_count"/>
                 <field name="pending_count"/>
                 <field name="total_amount"/>

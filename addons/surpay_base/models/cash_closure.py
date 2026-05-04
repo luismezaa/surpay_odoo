@@ -93,7 +93,6 @@ class SurpayCashClosure(models.Model):
             ("state", "=", "paid"),
             ("transferred", "=", False),
             ("cash_closure_id", "=", False),
-            ("client_id", "=", self.client_id.id),
             ("create_date", ">=", start),
             ("create_date", "<", end),
         ]
@@ -101,10 +100,6 @@ class SurpayCashClosure(models.Model):
             domain.append(("seller_user_id", "=", self.seller_user_id.id))
         else:
             domain.append(("seller_user_id", "=", False))
-        if self.provider:
-            domain.append(("provider", "=", self.provider))
-        if self.sales_channel:
-            domain.append(("sales_channel", "=", self.sales_channel))
         return domain
 
     @api.model
@@ -123,15 +118,14 @@ class SurpayCashClosure(models.Model):
         grouped = {}
         empty_set = tx_model.browse()
         for tx in txs:
-            key = (tx.client_id.id, tx.seller_user_id.id or False)
-            grouped[key] = grouped.get(key, empty_set) | tx
+                key = tx.seller_user_id.id or False
+                grouped[key] = grouped.get(key, empty_set) | tx
 
-        for (client_id, seller_user_id), tx_group in grouped.items():
+            for seller_user_id, tx_group in grouped.items():
             closure = self.sudo().search(
                 [
                     ("state", "=", "draft"),
                     ("closure_date", "=", day),
-                    ("client_id", "=", client_id),
                     ("seller_user_id", "=", seller_user_id),
                 ],
                 limit=1,
@@ -143,7 +137,6 @@ class SurpayCashClosure(models.Model):
                     [
                         ("state", "=", "closed"),
                         ("closure_date", "=", day),
-                        ("client_id", "=", client_id),
                         ("seller_user_id", "=", seller_user_id),
                     ],
                     order="id desc",
@@ -157,7 +150,6 @@ class SurpayCashClosure(models.Model):
                         {
                             "user_id": seller_user_id or self.env.user.id,
                             "seller_user_id": seller_user_id,
-                            "client_id": client_id,
                             "closure_date": day,
                         }
                     )

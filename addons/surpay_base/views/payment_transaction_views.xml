@@ -8,6 +8,7 @@
                 <field name="create_date" string="Creada"/>
                 <field name="order_id"/>
                 <field name="external_order_id"/>
+                <field name="concept"/>
                 <field name="state"/>
                 <field name="sales_channel"/>
                 <field name="partner_id"/>
