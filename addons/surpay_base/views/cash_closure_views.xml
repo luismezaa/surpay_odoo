@@ -41,6 +41,8 @@
                             <field name="transferred_count" readonly="1"/>
                             <field name="pending_count" readonly="1"/>
                             <field name="is_fully_transferred" readonly="1"/>
+                            <field name="total_base_amount" readonly="1"/>
+                            <field name="total_commission_amount" readonly="1"/>
                             <field name="total_amount" readonly="1"/>
                         </group>
                     </group>
@@ -56,6 +58,9 @@
                                 <field name="partner_id" readonly="1"/>
                                 <field name="client_id" readonly="1"/>
                                 <field name="provider" readonly="1"/>
+                                <field name="base_amount" readonly="1"/>
+                                <field name="commission_percent" readonly="1"/>
+                                <field name="commission_amount" readonly="1"/>
                                 <field name="amount" readonly="1"/>
                                 <field name="currency" readonly="1"/>
                                 <field name="transferred" widget="boolean_toggle" readonly="parent.state == 'closed'"/>

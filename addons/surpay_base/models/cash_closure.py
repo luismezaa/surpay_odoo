@@ -34,15 +34,25 @@ class SurpayCashClosure(models.Model):
     transaction_ids = fields.One2many("surpay.payment.transaction", "cash_closure_id", string="Transacciones")
     transaction_count = fields.Integer(string="N° Transacciones", compute="_compute_totals", store=True)
     total_amount = fields.Float(string="Total", compute="_compute_totals", store=True)
+    total_base_amount = fields.Float(string="Base total", compute="_compute_totals", store=True)
+    total_commission_amount = fields.Float(string="Comisión total", compute="_compute_totals", store=True)
     transferred_count = fields.Integer(string="Transferidas", compute="_compute_totals", store=True)
     pending_count = fields.Integer(string="Pendientes", compute="_compute_totals", store=True)
     is_fully_transferred = fields.Boolean(string="Todo transferido", compute="_compute_totals", store=True)
 
-    @api.depends("transaction_ids", "transaction_ids.amount", "transaction_ids.transferred")
+    @api.depends(
+        "transaction_ids",
+        "transaction_ids.amount",
+        "transaction_ids.base_amount",
+        "transaction_ids.commission_amount",
+        "transaction_ids.transferred",
+    )
     def _compute_totals(self):
         for rec in self:
             rec.transaction_count = len(rec.transaction_ids)
             rec.total_amount = sum(rec.transaction_ids.mapped("amount"))
+            rec.total_base_amount = sum(rec.transaction_ids.mapped("base_amount"))
+            rec.total_commission_amount = sum(rec.transaction_ids.mapped("commission_amount"))
             rec.transferred_count = len(rec.transaction_ids.filtered("transferred"))
             rec.pending_count = rec.transaction_count - rec.transferred_count
             rec.is_fully_transferred = bool(rec.transaction_ids) and rec.pending_count == 0
