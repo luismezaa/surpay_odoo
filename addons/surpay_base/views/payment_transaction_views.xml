@@ -14,6 +14,9 @@
                 <field name="partner_id"/>
                 <field name="client_id"/>
                 <field name="provider"/>
+                <field name="base_amount"/>
+                <field name="commission_percent"/>
+                <field name="commission_amount"/>
                 <field name="amount"/>
                 <field name="currency"/>
                 <field name="transferred"/>
@@ -47,6 +50,10 @@
                     </group>
                     <group>
                         <group string="Montos">
+                            <field name="base_amount" readonly="1"/>
+                            <field name="commission_percent" readonly="1"/>
+                            <field name="commission_amount" readonly="1"/>
+                            <field name="commission_rule_id" readonly="1"/>
                             <field name="amount" readonly="1"/>
                             <field name="currency" readonly="1"/>
                         </group>

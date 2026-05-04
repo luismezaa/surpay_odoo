@@ -13,6 +13,7 @@
         "data/ir_sequence_data.xml",
         "views/provider_config_views.xml",
         "views/api_client_views.xml",
+        "views/commission_rule_views.xml",
         "views/payment_transaction_views.xml",
         "views/cash_closure_views.xml",
         "views/internal_sale_templates.xml",

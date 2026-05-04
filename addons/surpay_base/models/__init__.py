@@ -1,5 +1,6 @@
 from . import provider_config
 from . import api_client
+from . import commission_rule
 from . import payment_transaction
 from . import payment_event
 from . import cash_closure

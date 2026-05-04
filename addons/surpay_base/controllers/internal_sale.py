@@ -49,6 +49,16 @@ class SurpayInternalSaleController(http.Controller):
             }
 
         client = self._default_api_client()
+        commission_data = request.env["surpay.commission.rule"].sudo().compute_amounts(
+            provider=provider_config.provider,
+            base_amount=amount_clp,
+            currency="CLP",
+            client_id=client.id,
+            sales_channel="internal",
+        )
+        amount_to_provider = commission_data["total_amount"]
+        commission_rule = commission_data["rule"]
+
         intent_model = request.env["surpay.payment.intent"].sudo()
         order_id = intent_model.generate_order_id()
         expires_at = intent_model.build_expiration(900)
@@ -62,7 +72,11 @@ class SurpayInternalSaleController(http.Controller):
                 "external_order_id": order_id,
                 "provider": "depay",
                 "source_channel": "internal",
-                "amount": amount_clp,
+                "base_amount": amount_clp,
+                "commission_percent": commission_data["commission_percent"],
+                "commission_amount": commission_data["commission_amount"],
+                "commission_rule_id": commission_rule.id,
+                "amount": amount_to_provider,
                 "currency": "CLP",
                 "idempotency_key": uuid.uuid4().hex,
                 "client_id": client.id,
@@ -74,7 +88,7 @@ class SurpayInternalSaleController(http.Controller):
         )
 
         depay_payload = {
-            "amount": amount_clp,
+            "amount": amount_to_provider,
             "local_currency": "CLP",
             "local_country": "CL",
             "qr_from": "AR",
@@ -84,7 +98,7 @@ class SurpayInternalSaleController(http.Controller):
         creds = provider_config.get_credentials()
         if creds.get("pos_id"):
             depay_payload["pos_external_reference"] = creds.get("pos_id")
-        display_concept = concept or f"Compra {int(amount_clp)} CLP"
+        display_concept = concept or f"Compra {int(amount_to_provider)} CLP"
         provider_request_payload = dict(depay_payload)
         provider_request_payload["display_concept"] = display_concept
 

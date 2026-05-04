@@ -183,6 +183,16 @@ class SurpayApiController(http.Controller):
         except (ValueError, TypeError):
             return self._error(400, "invalid_amount", "amount must be a valid number.")
 
+        commission_data = request.env["surpay.commission.rule"].sudo().compute_amounts(
+            provider=provider,
+            base_amount=amount,
+            currency=currency,
+            client_id=client.id,
+            sales_channel="external",
+        )
+        amount_to_provider = commission_data["total_amount"]
+        commission_rule = commission_data["rule"]
+
         intent_model = request.env["surpay.payment.intent"].sudo()
         existing_idempotent = intent_model.search(
             [
@@ -226,7 +236,11 @@ class SurpayApiController(http.Controller):
                 "external_order_id": external_order_id,
                 "provider": "depay",
                 "source_channel": "external",
-                "amount": amount,
+                "base_amount": amount,
+                "commission_percent": commission_data["commission_percent"],
+                "commission_amount": commission_data["commission_amount"],
+                "commission_rule_id": commission_rule.id,
+                "amount": amount_to_provider,
                 "currency": currency,
                 "state": "created",
                 "idempotency_key": idempotency_key,
@@ -241,12 +255,12 @@ class SurpayApiController(http.Controller):
         cfg = request.env["ir.config_parameter"].sudo()
         external_reference = external_order_id or order_id
         depay_payload = {
-            "amount": amount,
+            "amount": amount_to_provider,
             "local_currency": currency,
             "external_reference": external_reference,
             "notification_url": callback_url,
         }
-        display_concept = concept or f"Compra de Giftcard {int(amount)} {currency}"
+        display_concept = concept or f"Compra de Giftcard {int(amount_to_provider)} {currency}"
         provider_request_payload = dict(depay_payload)
         provider_request_payload["display_concept"] = display_concept
         if local_country:

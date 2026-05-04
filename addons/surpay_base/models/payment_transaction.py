@@ -25,6 +25,15 @@ class SurpayPaymentTransaction(models.Model):
         default="created",
         index=True,
     )
+    base_amount = fields.Float(string="Monto base")
+    commission_percent = fields.Float(string="Comision (%)", digits=(16, 4))
+    commission_amount = fields.Float(string="Monto comision")
+    commission_rule_id = fields.Many2one(
+        "surpay.commission.rule",
+        string="Regla de comision",
+        ondelete="set null",
+        index=True,
+    )
     amount = fields.Float(string="Monto", required=True)
     currency = fields.Char(string="Moneda", required=True)
     concept = fields.Char(string="Concepto", index=True)

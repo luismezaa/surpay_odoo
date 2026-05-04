@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="surpay_commission_rule_list" model="ir.ui.view">
+        <field name="name">surpay.commission.rule.list</field>
+        <field name="model">surpay.commission.rule</field>
+        <field name="arch" type="xml">
+            <list string="Reglas de comision" default_order="sequence asc, id asc">
+                <field name="sequence"/>
+                <field name="provider"/>
+                <field name="client_id"/>
+                <field name="sales_channel"/>
+                <field name="commission_percent"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="surpay_commission_rule_form" model="ir.ui.view">
+        <field name="name">surpay.commission.rule.form</field>
+        <field name="model">surpay.commission.rule</field>
+        <field name="arch" type="xml">
+            <form string="Regla de comision">
+                <sheet>
+                    <group>
+                        <group string="Scope de la regla">
+                            <field name="active"/>
+                            <field name="sequence"/>
+                            <field name="provider"/>
+                            <field name="client_id"/>
+                            <field name="sales_channel"/>
+                        </group>
+                        <group string="Comision">
+                            <field name="commission_percent"/>
+                            <field name="name" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Notas">
+                        <field name="note" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="surpay_commission_rule_search" model="ir.ui.view">
+        <field name="name">surpay.commission.rule.search</field>
+        <field name="model">surpay.commission.rule</field>
+        <field name="arch" type="xml">
+            <search string="Reglas de comision">
+                <field name="provider"/>
+                <field name="client_id"/>
+                <field name="sales_channel"/>
+                <filter name="active_rules" string="Activas" domain="[('active', '=', True)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="surpay_commission_rule_action" model="ir.actions.act_window">
+        <field name="name">Reglas de comision</field>
+        <field name="res_model">surpay.commission.rule</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Configura comisiones por proveedor y cliente API</p>
+            <p>
+                Prioridad de aplicacion: proveedor+cliente+canal, proveedor+cliente,
+                proveedor+canal y luego proveedor global.
+            </p>
+        </field>
+    </record>
+
+    <menuitem
+        id="surpay_commission_rule_menu"
+        name="Reglas de comision"
+        parent="surpay_menu_root"
+        action="surpay_commission_rule_action"
+        groups="surpay_base.group_surpay_manager,base.group_system"
+        sequence="4"
+    />
+</odoo>

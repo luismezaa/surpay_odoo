@@ -34,6 +34,10 @@ class SurpayPaymentIntent(models.Model):
     order_id = fields.Char(required=True, index=True)
     external_order_id = fields.Char(index=True)
     provider_payment_id = fields.Char(index=True)
+    base_amount = fields.Float(default=0.0)
+    commission_percent = fields.Float(digits=(16, 4), default=0.0)
+    commission_amount = fields.Float(default=0.0)
+    commission_rule_id = fields.Many2one("surpay.commission.rule", ondelete="set null", index=True)
     amount = fields.Float(required=True)
     currency = fields.Char(required=True)
     idempotency_key = fields.Char(required=True, index=True)
@@ -69,6 +73,8 @@ class SurpayPaymentIntent(models.Model):
         for vals in vals_list:
             if not vals.get("payment_link_token"):
                 vals["payment_link_token"] = uuid.uuid4().hex
+            if vals.get("base_amount") is None:
+                vals["base_amount"] = vals.get("amount", 0.0)
         records = super().create(vals_list)
         records.sync_transaction()
         return records
@@ -105,6 +111,9 @@ class SurpayPaymentIntent(models.Model):
             "provider": self.provider,
             "provider_payment_id": self.provider_payment_id,
             "state": self.state,
+            "base_amount": self.base_amount,
+            "commission_percent": self.commission_percent,
+            "commission_amount": self.commission_amount,
             "amount": self.amount,
             "currency": self.currency,
             "expires_at": self.expires_at,
@@ -134,6 +143,10 @@ class SurpayPaymentIntent(models.Model):
                 "provider": self.provider,
                 "provider_payment_id": self.provider_payment_id,
                 "state": self.state,
+                "base_amount": self.base_amount,
+                "commission_percent": self.commission_percent,
+                "commission_amount": self.commission_amount,
+                "commission_rule_id": self.commission_rule_id.id,
                 "amount": self.amount,
                 "currency": self.currency,
                 "client_id": self.client_id.id,
@@ -156,6 +169,10 @@ class SurpayPaymentIntent(models.Model):
                 "provider": rec.provider,
                 "provider_payment_id": rec.provider_payment_id,
                 "state": rec.state,
+                "base_amount": rec.base_amount,
+                "commission_percent": rec.commission_percent,
+                "commission_amount": rec.commission_amount,
+                "commission_rule_id": rec.commission_rule_id.id,
                 "amount": rec.amount,
                 "currency": rec.currency,
                 "client_id": rec.client_id.id,
