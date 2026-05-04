@@ -91,6 +91,7 @@
         name="Cash Closure"
         parent="surpay_menu_root"
         action="surpay_cash_closure_action"
+        groups="surpay_base.group_surpay_manager,base.group_system"
         sequence="4"
     />
 </odoo>

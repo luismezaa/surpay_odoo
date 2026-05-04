@@ -112,6 +112,7 @@
         name="Provider Configuration"
         parent="surpay_menu_root"
         action="surpay_provider_config_action"
+        groups="surpay_base.group_surpay_manager,base.group_system"
         sequence="1"
     />
 </odoo>
