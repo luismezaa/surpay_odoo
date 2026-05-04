@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.misc import format_date
 
 
 class SurpayCashClosure(models.Model):
@@ -90,7 +91,7 @@ class SurpayCashClosure(models.Model):
         result = []
         for rec in self:
             if rec.closure_date:
-                date_label = fields.Date.to_string(rec.closure_date)
+                date_label = format_date(rec.env, rec.closure_date)
                 result.append((rec.id, f"{rec.name} - {date_label}"))
             else:
                 result.append((rec.id, rec.name))
