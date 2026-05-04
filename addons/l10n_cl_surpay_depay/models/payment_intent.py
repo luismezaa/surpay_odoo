@@ -126,6 +126,7 @@ class SurpayPaymentIntent(models.Model):
         if self.transaction_id:
             return self.transaction_id
 
+        seller_user = self.client_id.partner_id.user_ids[:1] or self.env.ref("base.user_admin")
         tx = self.env["surpay.payment.transaction"].sudo().create(
             {
                 "order_id": self.order_id,
@@ -140,6 +141,7 @@ class SurpayPaymentIntent(models.Model):
                 "sales_channel": self.source_channel or "external",
                 "provider_raw": self.provider_response_payload,
                 "concept": self.concept,
+                "seller_user_id": seller_user.id,
             }
         )
         self.transaction_id = tx.id
@@ -148,6 +150,7 @@ class SurpayPaymentIntent(models.Model):
     def sync_transaction(self):
         for rec in self:
             tx = rec.ensure_transaction()
+            seller_user = rec.client_id.partner_id.user_ids[:1] or rec.env.ref("base.user_admin")
             vals = {
                 "external_order_id": rec.external_order_id,
                 "provider": rec.provider,
@@ -159,6 +162,7 @@ class SurpayPaymentIntent(models.Model):
                 "partner_id": (rec.partner_id or rec.client_id.partner_id).id,
                 "sales_channel": rec.source_channel or "external",
                 "provider_raw": rec.provider_response_payload,
+                "seller_user_id": seller_user.id,
             }
             if rec.concept:
                 vals["concept"] = rec.concept

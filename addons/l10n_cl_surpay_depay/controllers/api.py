@@ -233,6 +233,7 @@ class SurpayApiController(http.Controller):
                 "client_id": client.id,
                 "notification_url": callback_url,
                 "expires_at": expires_at,
+                "concept": concept,
             }
         )
         transaction = intent.ensure_transaction()
