@@ -19,7 +19,7 @@ class SurpayCashClosure(models.Model):
     )
     user_id = fields.Many2one("res.users", string="Usuario", required=True, default=lambda self: self.env.user, ondelete="restrict")
     seller_user_id = fields.Many2one("res.users", string="Vendedor", index=True, ondelete="set null")
-    client_id = fields.Many2one("surpay.api.client", string="Cliente API", required=True, ondelete="restrict", index=True)
+    client_id = fields.Many2one("surpay.api.client", string="Cliente API", ondelete="set null", index=True)
     closure_date = fields.Date(string="Fecha de cierre", required=True, default=fields.Date.context_today, index=True)
     date_from = fields.Datetime(string="Desde", required=True, default=lambda self: fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
     date_to = fields.Datetime(string="Hasta", required=True, default=fields.Datetime.now)
@@ -118,10 +118,10 @@ class SurpayCashClosure(models.Model):
         grouped = {}
         empty_set = tx_model.browse()
         for tx in txs:
-                key = tx.seller_user_id.id or False
-                grouped[key] = grouped.get(key, empty_set) | tx
+            key = tx.seller_user_id.id or False
+            grouped[key] = grouped.get(key, empty_set) | tx
 
-            for seller_user_id, tx_group in grouped.items():
+        for seller_user_id, tx_group in grouped.items():
             closure = self.sudo().search(
                 [
                     ("state", "=", "draft"),
