@@ -1,3 +1,5 @@
+from datetime import datetime, time, timedelta
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -15,6 +17,9 @@ class SurpayCashClosure(models.Model):
         index=True,
     )
     user_id = fields.Many2one("res.users", required=True, default=lambda self: self.env.user, ondelete="restrict")
+    seller_user_id = fields.Many2one("res.users", string="Seller", index=True, ondelete="set null")
+    client_id = fields.Many2one("surpay.api.client", string="Client", required=True, ondelete="restrict", index=True)
+    closure_date = fields.Date(required=True, default=fields.Date.context_today, index=True)
     date_from = fields.Datetime(required=True, default=lambda self: fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
     date_to = fields.Datetime(required=True, default=fields.Datetime.now)
     provider = fields.Char(help="Optional provider filter, e.g. depay")
@@ -26,37 +31,136 @@ class SurpayCashClosure(models.Model):
     transaction_ids = fields.One2many("surpay.payment.transaction", "cash_closure_id", string="Transactions")
     transaction_count = fields.Integer(compute="_compute_totals", store=True)
     total_amount = fields.Float(compute="_compute_totals", store=True)
+    transferred_count = fields.Integer(compute="_compute_totals", store=True)
+    pending_count = fields.Integer(compute="_compute_totals", store=True)
+    is_fully_transferred = fields.Boolean(compute="_compute_totals", store=True)
 
-    @api.depends("transaction_ids", "transaction_ids.amount")
+    @api.depends("transaction_ids", "transaction_ids.amount", "transaction_ids.transferred")
     def _compute_totals(self):
         for rec in self:
             rec.transaction_count = len(rec.transaction_ids)
             rec.total_amount = sum(rec.transaction_ids.mapped("amount"))
+            rec.transferred_count = len(rec.transaction_ids.filtered("transferred"))
+            rec.pending_count = rec.transaction_count - rec.transferred_count
+            rec.is_fully_transferred = bool(rec.transaction_ids) and rec.pending_count == 0
+
+    @api.model
+    def _day_window(self, day_value):
+        day = fields.Date.to_date(day_value or fields.Date.context_today(self))
+        start = datetime.combine(day, time.min)
+        end = start + timedelta(days=1)
+        return day, start, end
+
+    @api.model
+    def _apply_closure_day_bounds(self, vals):
+        day_value = vals.get("closure_date")
+        if not day_value:
+            return
+        _, start, end = self._day_window(day_value)
+        vals["date_from"] = start
+        vals["date_to"] = end
+
+    @api.onchange("closure_date")
+    def _onchange_closure_date(self):
+        for rec in self:
+            if rec.closure_date:
+                _, start, end = rec._day_window(rec.closure_date)
+                rec.date_from = start
+                rec.date_to = end
 
     @api.model_create_multi
     def create(self, vals_list):
         seq = self.env["ir.sequence"].sudo()
         for vals in vals_list:
+            if not vals.get("closure_date"):
+                vals["closure_date"] = fields.Date.context_today(self)
+            self._apply_closure_day_bounds(vals)
             if not vals.get("name") or vals.get("name") == "New":
                 vals["name"] = seq.next_by_code("surpay.cash.closure") or "CASH-CLOSURE"
         return super().create(vals_list)
 
+    def write(self, vals):
+        if "closure_date" in vals:
+            self._apply_closure_day_bounds(vals)
+        return super().write(vals)
+
     def _build_tx_domain(self):
         self.ensure_one()
+        _, start, end = self._day_window(self.closure_date)
         domain = [
             ("state", "=", "paid"),
             ("transferred", "=", False),
             ("cash_closure_id", "=", False),
+            ("client_id", "=", self.client_id.id),
+            ("create_date", ">=", start),
+            ("create_date", "<", end),
         ]
-        if self.date_from:
-            domain.append(("create_date", ">=", self.date_from))
-        if self.date_to:
-            domain.append(("create_date", "<=", self.date_to))
+        if self.seller_user_id:
+            domain.append(("seller_user_id", "=", self.seller_user_id.id))
+        else:
+            domain.append(("seller_user_id", "=", False))
         if self.provider:
             domain.append(("provider", "=", self.provider))
         if self.sales_channel:
             domain.append(("sales_channel", "=", self.sales_channel))
         return domain
+
+    @api.model
+    def _prepare_daily_closures(self, day_value=None):
+        day, start, end = self._day_window(day_value)
+        tx_model = self.env["surpay.payment.transaction"].sudo()
+        txs = tx_model.search(
+            [
+                ("state", "=", "paid"),
+                ("transferred", "=", False),
+                ("create_date", ">=", start),
+                ("create_date", "<", end),
+            ]
+        )
+
+        grouped = {}
+        empty_set = tx_model.browse()
+        for tx in txs:
+            key = (tx.client_id.id, tx.seller_user_id.id or False)
+            grouped[key] = grouped.get(key, empty_set) | tx
+
+        for (client_id, seller_user_id), tx_group in grouped.items():
+            closure = self.sudo().search(
+                [
+                    ("state", "=", "draft"),
+                    ("closure_date", "=", day),
+                    ("client_id", "=", client_id),
+                    ("seller_user_id", "=", seller_user_id),
+                ],
+                limit=1,
+            )
+            if not closure:
+                closure = self.sudo().create(
+                    {
+                        "user_id": seller_user_id or self.env.user.id,
+                        "seller_user_id": seller_user_id,
+                        "client_id": client_id,
+                        "closure_date": day,
+                    }
+                )
+
+            unassigned = tx_group.filtered(lambda t: not t.cash_closure_id)
+            if unassigned:
+                unassigned.write({"cash_closure_id": closure.id})
+
+    @api.model
+    def action_open_cash_closure(self):
+        day = self.env.context.get("closure_date") or fields.Date.context_today(self)
+        self._prepare_daily_closures(day)
+
+        action = self.env.ref("surpay_base.surpay_cash_closure_action").sudo().read()[0]
+        action["context"] = {
+            **self.env.context,
+            "search_default_draft": 1,
+            "search_default_today": 1,
+            "default_closure_date": day,
+        }
+        return action
 
     def action_load_transactions(self):
         for rec in self:
@@ -73,5 +177,9 @@ class SurpayCashClosure(models.Model):
                 rec.action_load_transactions()
             if not rec.transaction_ids:
                 raise UserError("No paid transactions available for closure in the selected range.")
-            rec.transaction_ids.write({"transferred": True})
+            pending = rec.transaction_ids.filtered(lambda t: not t.transferred)
+            if pending:
+                raise UserError(
+                    "There are pending transactions not marked as transferred. Mark each detail before closing the cash closure."
+                )
             rec.state = "closed"
