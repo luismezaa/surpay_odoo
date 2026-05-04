@@ -9,31 +9,33 @@ class SurpayCashClosure(models.Model):
     _description = "Cierre de caja Surpay"
     _order = "id desc"
 
-    name = fields.Char(default="New", required=True, copy=False)
+    name = fields.Char(string="Nombre", default="New", required=True, copy=False)
     state = fields.Selection(
+        string="Estado",
         selection=[("draft", "Borrador"), ("closed", "Cerrado")],
         default="draft",
         required=True,
         index=True,
     )
-    user_id = fields.Many2one("res.users", required=True, default=lambda self: self.env.user, ondelete="restrict")
+    user_id = fields.Many2one("res.users", string="Usuario", required=True, default=lambda self: self.env.user, ondelete="restrict")
     seller_user_id = fields.Many2one("res.users", string="Vendedor", index=True, ondelete="set null")
     client_id = fields.Many2one("surpay.api.client", string="Cliente API", required=True, ondelete="restrict", index=True)
-    closure_date = fields.Date(required=True, default=fields.Date.context_today, index=True)
-    date_from = fields.Datetime(required=True, default=lambda self: fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
-    date_to = fields.Datetime(required=True, default=fields.Datetime.now)
-    provider = fields.Char(help="Optional provider filter, e.g. depay")
+    closure_date = fields.Date(string="Fecha de cierre", required=True, default=fields.Date.context_today, index=True)
+    date_from = fields.Datetime(string="Desde", required=True, default=lambda self: fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
+    date_to = fields.Datetime(string="Hasta", required=True, default=fields.Datetime.now)
+    provider = fields.Char(string="Proveedor", help="Filtro opcional de proveedor, p. ej. depay")
     sales_channel = fields.Selection(
+        string="Canal de venta",
         selection=[("external", "Externo"), ("internal", "Interno")],
         help="Filtro opcional de canal para el cierre.",
     )
 
-    transaction_ids = fields.One2many("surpay.payment.transaction", "cash_closure_id", string="Transactions")
-    transaction_count = fields.Integer(compute="_compute_totals", store=True)
-    total_amount = fields.Float(compute="_compute_totals", store=True)
-    transferred_count = fields.Integer(compute="_compute_totals", store=True)
-    pending_count = fields.Integer(compute="_compute_totals", store=True)
-    is_fully_transferred = fields.Boolean(compute="_compute_totals", store=True)
+    transaction_ids = fields.One2many("surpay.payment.transaction", "cash_closure_id", string="Transacciones")
+    transaction_count = fields.Integer(string="N° Transacciones", compute="_compute_totals", store=True)
+    total_amount = fields.Float(string="Total", compute="_compute_totals", store=True)
+    transferred_count = fields.Integer(string="Transferidas", compute="_compute_totals", store=True)
+    pending_count = fields.Integer(string="Pendientes", compute="_compute_totals", store=True)
+    is_fully_transferred = fields.Boolean(string="Todo transferido", compute="_compute_totals", store=True)
 
     @api.depends("transaction_ids", "transaction_ids.amount", "transaction_ids.transferred")
     def _compute_totals(self):

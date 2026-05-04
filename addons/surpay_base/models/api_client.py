@@ -8,12 +8,12 @@ class SurpayApiClient(models.Model):
     _name = "surpay.api.client"
     _description = "Cliente API externo de Surpay"
 
-    name = fields.Char(required=True)
-    active = fields.Boolean(default=True)
-    client_id = fields.Char(required=True, index=True)
-    client_secret = fields.Char(required=True)
-    webhook_url = fields.Char()
-    webhook_secret = fields.Char()
+    name = fields.Char(string="Nombre", required=True)
+    active = fields.Boolean(string="Activo", default=True)
+    client_id = fields.Char(string="ID cliente", required=True, index=True)
+    client_secret = fields.Char(string="Secreto cliente", required=True)
+    webhook_url = fields.Char(string="URL webhook")
+    webhook_secret = fields.Char(string="Secreto webhook")
     partner_id = fields.Many2one(
         "res.partner",
         string="Contacto asociado",
@@ -22,19 +22,21 @@ class SurpayApiClient(models.Model):
         help="Contacto usado para etiquetar ventas creadas con este cliente API.",
     )
     ip_filter_mode = fields.Selection(
+        string="Modo filtro IP",
         selection=[("all", "Todas las IPs"), ("list", "Lista permitida")],
         default="all",
         required=True,
         help="Elige 'Todas las IPs' para permitir cualquier origen, o 'Lista permitida' para restringir acceso.",
     )
     allowed_ips = fields.Text(
+        string="IPs permitidas",
         help="IPs o CIDRs permitidos (uno por linea o separados por coma). Ejemplo: 192.168.1.10, 10.0.0.0/24",
     )
 
     # Defaults used when request payload omits these fields.
-    default_local_currency = fields.Char(default="ARS", help="Codigo de moneda ISO 4217, p. ej. ARS")
-    default_local_country = fields.Char(default="AR", help="Codigo de pais ISO 3166-1 alpha-2, p. ej. AR")
-    default_qr_from = fields.Char(default="AR", help="Codigo de pais de origen ISO 3166-1 alpha-2, p. ej. AR")
+    default_local_currency = fields.Char(string="Moneda local", default="ARS", help="Codigo de moneda ISO 4217, p. ej. ARS")
+    default_local_country = fields.Char(string="País local", default="AR", help="Codigo de pais ISO 3166-1 alpha-2, p. ej. AR")
+    default_qr_from = fields.Char(string="País origen QR", default="AR", help="Codigo de pais de origen ISO 3166-1 alpha-2, p. ej. AR")
 
     _sql_constraints = [
         ("surpay_api_client_id_uniq", "unique(client_id)", "El client_id debe ser unico."),

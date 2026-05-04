@@ -24,18 +24,21 @@ class SurpayProviderConfig(models.Model):
     ]
 
     provider = fields.Selection(
+        string="Proveedor",
         selection=PROVIDERS,
         required=True,
         index=True,
         help="Proveedor de pago",
     )
     environment = fields.Selection(
+        string="Entorno",
         selection=ENVIRONMENTS,
         required=True,
         default="sandbox",
         help="Entorno: Sandbox para pruebas, Produccion para operacion real",
     )
     state = fields.Selection(
+        string="Estado",
         selection=[("active", "Activo"), ("inactive", "Inactivo")],
         default="active",
         required=True,
@@ -72,11 +75,11 @@ class SurpayProviderConfig(models.Model):
 
     # Metadata
     notes = fields.Text(help="Notas internas sobre esta configuracion")
-    last_test_date = fields.Datetime(readonly=True, help="Ultima prueba de conexion exitosa")
-    create_date = fields.Datetime(readonly=True)
-    create_uid = fields.Many2one("res.users", readonly=True)
-    write_date = fields.Datetime(readonly=True)
-    write_uid = fields.Many2one("res.users", readonly=True)
+    last_test_date = fields.Datetime(string="Última prueba", readonly=True, help="Ultima prueba de conexion exitosa")
+    create_date = fields.Datetime(string="Creado", readonly=True)
+    create_uid = fields.Many2one("res.users", string="Creado por", readonly=True)
+    write_date = fields.Datetime(string="Modificado", readonly=True)
+    write_uid = fields.Many2one("res.users", string="Modificado por", readonly=True)
 
     @api.depends("provider", "environment")
     def _compute_display_name(self):

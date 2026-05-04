@@ -6,12 +6,13 @@ class SurpayPaymentTransaction(models.Model):
     _description = "Transaccion de pago Surpay"
     _order = "id desc"
 
-    order_id = fields.Char(required=True, index=True)
-    external_order_id = fields.Char(index=True)
-    provider = fields.Char(required=True, index=True)
-    provider_config_id = fields.Many2one("surpay.provider.config", index=True, ondelete="set null")
-    provider_payment_id = fields.Char(index=True)
+    order_id = fields.Char(string="Orden", required=True, index=True)
+    external_order_id = fields.Char(string="Orden externa", index=True)
+    provider = fields.Char(string="Proveedor", required=True, index=True)
+    provider_config_id = fields.Many2one("surpay.provider.config", string="Config. proveedor", index=True, ondelete="set null")
+    provider_payment_id = fields.Char(string="ID pago proveedor", index=True)
     state = fields.Selection(
+        string="Estado",
         selection=[
             ("created", "Creada"),
             ("pending", "Pendiente"),
@@ -24,22 +25,23 @@ class SurpayPaymentTransaction(models.Model):
         default="created",
         index=True,
     )
-    amount = fields.Float(required=True)
-    currency = fields.Char(required=True)
-    concept = fields.Char(index=True)
-    customer_email = fields.Char()
-    partner_id = fields.Many2one("res.partner", ondelete="set null", index=True)
+    amount = fields.Float(string="Monto", required=True)
+    currency = fields.Char(string="Moneda", required=True)
+    concept = fields.Char(string="Concepto", index=True)
+    customer_email = fields.Char(string="Email cliente")
+    partner_id = fields.Many2one("res.partner", string="Socio", ondelete="set null", index=True)
     sales_channel = fields.Selection(
+        string="Canal de venta",
         selection=[("external", "Externo"), ("internal", "Interno")],
         default="external",
         required=True,
         index=True,
     )
-    seller_user_id = fields.Many2one("res.users", index=True, ondelete="set null")
-    transferred = fields.Boolean(default=False, index=True)
-    cash_closure_id = fields.Many2one("surpay.cash.closure", ondelete="set null", index=True)
-    client_id = fields.Many2one("surpay.api.client", required=True, ondelete="restrict", index=True)
-    provider_raw = fields.Json()
+    seller_user_id = fields.Many2one("res.users", string="Vendedor", index=True, ondelete="set null")
+    transferred = fields.Boolean(string="Transferida", default=False, index=True)
+    cash_closure_id = fields.Many2one("surpay.cash.closure", string="Cierre de caja", ondelete="set null", index=True)
+    client_id = fields.Many2one("surpay.api.client", string="Cliente", required=True, ondelete="restrict", index=True)
+    provider_raw = fields.Json(string="Respuesta proveedor")
 
     _sql_constraints = [
         ("surpay_payment_transaction_order_uniq", "unique(order_id)", "El order_id debe ser unico."),
