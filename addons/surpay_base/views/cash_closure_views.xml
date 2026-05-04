@@ -5,7 +5,7 @@
         <field name="model">surpay.cash.closure</field>
         <field name="arch" type="xml">
             <list string="Cierres de caja">
-                <field name="name"/>
+                <field name="display_name" string="Nombre"/>
                 <field name="closure_date"/>
                 <field name="state"/>
                 <field name="client_id"/>
