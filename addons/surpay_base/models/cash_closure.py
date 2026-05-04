@@ -87,15 +87,13 @@ class SurpayCashClosure(models.Model):
             self._apply_closure_day_bounds(vals)
         return super().write(vals)
 
-    def name_get(self):
-        result = []
+    @api.depends("name", "closure_date")
+    def _compute_display_name(self):
+        super()._compute_display_name()
         for rec in self:
-            if rec.closure_date:
+            if rec.name and rec.closure_date:
                 date_label = format_date(rec.env, rec.closure_date)
-                result.append((rec.id, f"{rec.name} - {date_label}"))
-            else:
-                result.append((rec.id, rec.name))
-        return result
+                rec.display_name = f"{rec.name} - {date_label}"
 
     def _build_tx_domain(self):
         self.ensure_one()
