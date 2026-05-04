@@ -50,10 +50,10 @@
                         <page string="Credentials" name="credentials">
                             <group>
                                 <field name="api_key" password="True" help="Provider API Key (stored encrypted)" />
-                                <field name="customer_uuid" help="Customer UUID for provider (stored encrypted)" />
-                                <field name="pos_id" help="Point of Sale ID (stored encrypted)" />
+                                <field name="customer_uuid" password="True" help="Customer UUID for provider (stored encrypted)" />
+                                <field name="pos_id" password="True" help="Point of Sale ID (stored encrypted)" />
                                 <field name="webhook_secret" password="True" help="Webhook Secret (stored encrypted)" />
-                                <field name="base_url" help="Base URL for provider API (stored encrypted)" />
+                                <field name="base_url" password="True" help="Base URL for provider API (stored encrypted)" />
                                 <field name="webhook_url" help="Webhook URL for receiving provider callbacks" />
                             </group>
                         </page>
