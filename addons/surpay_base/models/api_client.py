@@ -60,6 +60,33 @@ class SurpayApiClient(models.Model):
             if item:
                 yield item
 
+    def resolve_seller_user(self, partner=None, fallback_to_admin=True):
+        """Return the user that should own sales for this API client.
+
+        Priority:
+        1) Intent/sale partner user (commercial partner), preferring internal users.
+        2) API client partner user, preferring internal users.
+        3) Administrator (optional fallback).
+        """
+        self.ensure_one()
+
+        def _pick_user(partner_rec):
+            if not partner_rec:
+                return self.env["res.users"]
+            commercial = partner_rec.commercial_partner_id
+            users = commercial.user_ids.filtered(lambda u: u.active)
+            internal = users.filtered(lambda u: not u.share)
+            return (internal or users)[:1]
+
+        seller_user = _pick_user(partner)
+        if not seller_user:
+            seller_user = _pick_user(self.partner_id)
+        if seller_user:
+            return seller_user
+        if fallback_to_admin:
+            return self.env.ref("base.user_admin")
+        return self.env["res.users"]
+
     def is_ip_allowed(self, ip_value):
         self.ensure_one()
         if self.ip_filter_mode == "all":
