@@ -49,6 +49,7 @@ class SurpayPaymentIntent(models.Model):
     notification_url = fields.Char()
     expires_at = fields.Datetime(required=True)
 
+    concept = fields.Char()
     provider_request_payload = fields.Json()
     provider_response_payload = fields.Json()
     payment_link_token = fields.Char(copy=False, index=True)
@@ -138,6 +139,7 @@ class SurpayPaymentIntent(models.Model):
                 "partner_id": (self.partner_id or self.client_id.partner_id).id,
                 "sales_channel": self.source_channel or "external",
                 "provider_raw": self.provider_response_payload,
+                "concept": self.concept,
             }
         )
         self.transaction_id = tx.id
@@ -146,17 +148,18 @@ class SurpayPaymentIntent(models.Model):
     def sync_transaction(self):
         for rec in self:
             tx = rec.ensure_transaction()
-            tx.write(
-                {
-                    "external_order_id": rec.external_order_id,
-                    "provider": rec.provider,
-                    "provider_payment_id": rec.provider_payment_id,
-                    "state": rec.state,
-                    "amount": rec.amount,
-                    "currency": rec.currency,
-                    "client_id": rec.client_id.id,
-                    "partner_id": (rec.partner_id or rec.client_id.partner_id).id,
-                    "sales_channel": rec.source_channel or "external",
-                    "provider_raw": rec.provider_response_payload,
-                }
-            )
+            vals = {
+                "external_order_id": rec.external_order_id,
+                "provider": rec.provider,
+                "provider_payment_id": rec.provider_payment_id,
+                "state": rec.state,
+                "amount": rec.amount,
+                "currency": rec.currency,
+                "client_id": rec.client_id.id,
+                "partner_id": (rec.partner_id or rec.client_id.partner_id).id,
+                "sales_channel": rec.source_channel or "external",
+                "provider_raw": rec.provider_response_payload,
+            }
+            if rec.concept:
+                vals["concept"] = rec.concept
+            tx.write(vals)

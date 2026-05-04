@@ -69,6 +69,7 @@ class SurpayInternalSaleController(http.Controller):
                 "partner_id": request.env.user.partner_id.id,
                 "notification_url": callback_url,
                 "expires_at": expires_at,
+                "concept": concept,
             }
         )
 
