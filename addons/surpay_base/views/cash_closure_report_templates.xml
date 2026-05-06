@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_surpay_cash_closure" model="ir.actions.report">
+        <field name="name">Conciliación Diaria</field>
+        <field name="model">surpay.cash.closure.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">surpay_base.report_cash_closure_document</field>
+        <field name="report_file">surpay_base.report_cash_closure_document</field>
+        <field name="print_report_name">'Conciliación Diaria - %s' % (object.report_date or '')</field>
+    </record>
+
+    <template id="report_cash_closure_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-set="report_data" t-value="doc._get_report_data()"/>
+                <t t-foreach="report_data['sections']" t-as="section">
+                    <t t-call="web.basic_layout">
+                        <div class="page">
+                            <div style="border-bottom: 2px solid #1f4e79; margin-bottom: 16px; padding-bottom: 10px;">
+                                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
+                                    <img t-if="report_data['company_logo']"
+                                         t-att-src="'data:image/png;base64,' + report_data['company_logo']"
+                                         style="max-height: 64px; max-width: 160px; object-fit: contain;"/>
+                                    <div>
+                                        <div style="font-size: 18px; font-weight: bold; color: #1f4e79;" t-esc="report_data['company_name']"/>
+                                        <div style="font-size: 15px; font-weight: 600; color: #2c5f8a; margin-top: 2px;">Conciliación Diaria</div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px; font-size: 12px; line-height: 1.7;">
+                                    <strong>Fecha de cierre:</strong>
+                                    <span t-esc="report_data['report_date_display']"/>
+                                    <span style="margin: 0 10px;">|</span>
+                                    <strong>Usuario:</strong>
+                                    <span t-esc="section['user'].name"/>
+                                    <br/>
+                                    <strong>Cierres:</strong>
+                                    <span t-esc="section['closure_names'] or 'Sin cierres'"/>
+                                    <span style="margin: 0 10px;">|</span>
+                                    <strong>Estados:</strong>
+                                    <span t-esc="section['closure_states']"/>
+                                    <br/>
+                                    <strong>Generado por:</strong>
+                                    <span t-esc="report_data['generated_by']"/>
+                                    <span style="margin: 0 10px;">|</span>
+                                    <strong>Generado el:</strong>
+                                    <span t-esc="report_data['generated_at']"/>
+                                </div>
+                            </div>
+
+                            <table class="table table-sm o_main_table" style="width: 100%; margin-bottom: 18px; font-size: 12px;">
+                                <thead>
+                                    <tr style="background-color: #dbe5f1;">
+                                        <th colspan="2">Resumen del dia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Cierres encontrados</td>
+                                        <td><span t-esc="section['closure_count']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Estados del cierre</td>
+                                        <td><span t-esc="section['closure_states']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Transacciones aprobadas</td>
+                                        <td><span t-esc="section['transaction_count']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Monto bruto procesado</td>
+                                        <td><span t-esc="section['gross_amount_display']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Comision Surpay</td>
+                                        <td>
+                                            <span t-esc="section['commission_amount_display']"/>
+                                            <span> (</span><span t-esc="section['commission_percent_display']"/><span>)</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Monto neto a liquidar</strong></td>
+                                        <td><span t-esc="section['net_amount_display']"/></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <t t-if="section['transactions']">
+                                <div style="font-size: 14px; font-weight: 600; color: #1f1f1f; margin: 18px 0 8px 0;">Detalle de transacciones</div>
+                                <table class="table table-sm o_main_table" style="width: 100%; font-size: 11px;">
+                                    <thead>
+                                        <tr style="background-color: #dbe5f1;">
+                                            <th>Orden</th>
+                                            <th>Fecha / Hora</th>
+                                            <th>Monto</th>
+                                            <th>Estado</th>
+                                            <th>Concepto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="section['transactions']" t-as="line">
+                                            <td><span t-esc="line['order_id']"/></td>
+                                            <td><span t-esc="line['datetime']"/></td>
+                                            <td><span t-esc="line['amount_display']"/></td>
+                                            <td><span t-esc="line['state_label']"/></td>
+                                            <td><span t-esc="line['concept']"/></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </t>
+                            <t t-else="">
+                                <p>No se encontraron transacciones aprobadas para este usuario en la fecha seleccionada.</p>
+                            </t>
+
+                            <table class="table table-sm o_main_table" style="width: 100%; margin-top: 18px; font-size: 12px;">
+                                <thead>
+                                    <tr style="background-color: #dbe5f1;">
+                                        <th colspan="2">Conciliacion financiera</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Total aprobado (ventas)</td>
+                                        <td><span t-esc="section['gross_amount_display']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>(=) Total conciliado</strong></td>
+                                        <td><strong><span t-esc="section['financial_total_display']"/></strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div style="margin-top: 14px; font-size: 11px; color: #555;">
+                                Nota: este informe considera las transacciones aprobadas asociadas al cierre del día seleccionado.
+                            </div>
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

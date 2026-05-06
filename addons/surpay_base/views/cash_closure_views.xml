@@ -24,6 +24,7 @@
         <field name="arch" type="xml">
             <form string="Cierre de caja">
                 <header>
+                    <button name="action_open_report_wizard" type="object" string="Informe PDF"/>
                     <button name="action_close_cash" type="object" string="Cerrar caja" class="btn-primary" invisible="state != 'draft'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,closed"/>
                 </header>

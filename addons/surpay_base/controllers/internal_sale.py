@@ -331,3 +331,4 @@ class SurpayInternalSaleController(http.Controller):
                 "odoo_return_url": self._odoo_return_url(),
             },
         )
+

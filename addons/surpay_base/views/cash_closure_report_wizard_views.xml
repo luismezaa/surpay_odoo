@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_surpay_cash_closure_report_wizard_form" model="ir.ui.view">
+        <field name="name">surpay.cash.closure.report.wizard.form</field>
+        <field name="model">surpay.cash.closure.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Conciliación Diaria">
+                <group>
+                    <field name="report_date"/>
+                    <field name="can_select_users" invisible="1"/>
+                    <field name="current_user_name" readonly="1" invisible="can_select_users"/>
+                    <field
+                        name="user_ids"
+                        widget="many2many_checkboxes"
+                        invisible="not can_select_users"
+                        required="can_select_users"
+                        options="{'no_create': True, 'no_quick_create': True, 'no_create_edit': True, 'no_open': True}"
+                    />
+                </group>
+                <group>
+                    <div colspan="2" class="o_form_label" invisible="not can_select_users">
+                        Si seleccionas varios usuarios, el PDF se genera con una pagina individual por cada usuario.
+                    </div>
+                    <div colspan="2" class="o_form_label" invisible="can_select_users">
+                        El reporte se generara para el usuario conectado y la fecha seleccionada.
+                    </div>
+                </group>
+                <footer>
+                    <button name="action_print_report" type="object" string="Descargar PDF" class="btn-primary"/>
+                    <button name="action_export_excel" type="object" string="Exportar Excel" class="btn-secondary"/>
+                    <button string="Cancelar" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_surpay_cash_closure_report_wizard" model="ir.actions.act_window">
+        <field name="name">Conciliación Diaria</field>
+        <field name="res_model">surpay.cash.closure.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_surpay_cash_closure_report_wizard_form"/>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem
+        id="surpay_reports_menu"
+        name="Reportes"
+        parent="surpay_menu_root"
+        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_manager,base.group_system"
+        sequence="10"
+    />
+
+    <menuitem
+        id="surpay_cash_closure_report_menu"
+        name="Conciliación Diaria"
+        parent="surpay_reports_menu"
+        action="action_surpay_cash_closure_report_wizard"
+        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_manager,base.group_system"
+        sequence="1"
+    />
+</odoo>

@@ -210,3 +210,14 @@ class SurpayCashClosure(models.Model):
             if pending:
                 raise UserError(_("Hay transacciones pendientes sin marcar como transferidas. Marca cada detalle antes de cerrar la caja."))
             rec.state = "closed"
+
+    def action_open_report_wizard(self):
+        self.ensure_one()
+        default_user_id = self.seller_user_id.id or self.user_id.id
+        action = self.env.ref("surpay_base.action_surpay_cash_closure_report_wizard").sudo().read()[0]
+        action["context"] = {
+            **self.env.context,
+            "default_report_date": self.closure_date,
+            "default_user_ids": [default_user_id] if default_user_id else [],
+        }
+        return action

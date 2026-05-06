@@ -16,6 +16,8 @@
         "views/commission_rule_views.xml",
         "views/payment_transaction_views.xml",
         "views/cash_closure_views.xml",
+        "views/cash_closure_report_wizard_views.xml",
+        "views/cash_closure_report_templates.xml",
         "views/internal_sale_templates.xml",
     ],
     "installable": True,

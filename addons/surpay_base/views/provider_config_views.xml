@@ -103,7 +103,7 @@
     <menuitem
         id="surpay_menu_root"
         name="Surpay"
-        groups="surpay_base.group_surpay_restricted_user,base.group_system"
+        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_manager,base.group_system"
         sequence="60"
     />
 
