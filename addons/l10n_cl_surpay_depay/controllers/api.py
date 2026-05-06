@@ -323,9 +323,13 @@ class SurpayApiController(http.Controller):
             return self._error(502, "provider_error", "Depay QR creation failed.")
 
         provider_order_id = depay_response.get("order_id")
-        mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
-            depay_response.get("order_status") or depay_response.get("status")
+        depay_raw_status = (
+            depay_response.get("order_status")
+            or depay_response.get("orderStatus")
+            or depay_response.get("state")
+            or "PENDING"
         )
+        mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(depay_raw_status)
 
         intent.write(
             {

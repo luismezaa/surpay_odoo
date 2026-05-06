@@ -207,10 +207,10 @@ class DepayApiService(models.AbstractModel):
         if not isinstance(data, dict):
             return ""
         return (
-            data.get("status")
-            or data.get("order_status")
+            data.get("order_status")
             or data.get("orderStatus")
             or data.get("state")
+            or data.get("status")
             or ""
         )
 
