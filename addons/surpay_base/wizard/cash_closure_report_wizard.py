@@ -18,7 +18,15 @@ class SurpayCashClosureReportWizard(models.TransientModel):
     user_ids = fields.Many2many(
         "res.users",
         string="Usuarios",
-        domain="[(\"active\", \"=\", True), (\"share\", \"=\", False)]",
+        domain=[
+            ("active", "=", True),
+            ("share", "=", False),
+            ("groups_id.category_id.name", "=", "Surpay"),
+        ],
+    )
+    all_surpay_users = fields.Boolean(
+        string="Todos los usuarios Surpay",
+        default=False,
     )
     can_select_users = fields.Boolean(
         string="Puede seleccionar usuarios",
@@ -55,9 +63,28 @@ class SurpayCashClosureReportWizard(models.TransientModel):
             "surpay_base.group_surpay_manager"
         )
 
+    def _get_all_surpay_users(self):
+        category = self.env["ir.module.category"].sudo().search(
+            [("name", "=", "Surpay")], limit=1
+        )
+        if not category:
+            return self.env["res.users"]
+        return self.env["res.users"].sudo().search(
+            [
+                ("active", "=", True),
+                ("share", "=", False),
+                ("groups_id.category_id", "=", category.id),
+            ]
+        )
+
     def _get_effective_users(self):
         self.ensure_one()
         if self.can_select_users:
+            if self.all_surpay_users:
+                users = self._get_all_surpay_users()
+                if not users:
+                    raise UserError(_("No se encontraron usuarios con acceso a Surpay."))
+                return users
             if not self.user_ids:
                 raise UserError(_("Debes seleccionar al menos un usuario."))
             return self.user_ids
