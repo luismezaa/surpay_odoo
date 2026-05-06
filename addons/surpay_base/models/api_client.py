@@ -14,6 +14,13 @@ class SurpayApiClient(models.Model):
     client_secret = fields.Char(string="Secreto cliente", required=True)
     webhook_url = fields.Char(string="URL webhook")
     webhook_secret = fields.Char(string="Secreto webhook")
+    provider_config_id = fields.Many2one(
+        "surpay.provider.config",
+        string="Configuracion proveedor (externa)",
+        ondelete="set null",
+        domain="[('provider', '=', 'depay')]",
+        help="Si se define, esta configuracion se usa para ventas externas de este cliente API.",
+    )
     partner_id = fields.Many2one(
         "res.partner",
         string="Contacto asociado",
@@ -114,3 +121,9 @@ class SurpayApiClient(models.Model):
                 continue
 
         return False
+
+    @api.constrains("provider_config_id")
+    def _check_provider_config(self):
+        for rec in self:
+            if rec.provider_config_id and rec.provider_config_id.provider != "depay":
+                raise ValidationError(_("Solo se permite configuracion de proveedor Depay para este cliente API."))

@@ -153,6 +153,19 @@ class DepayApiService(models.AbstractModel):
                 response = requests.post(url, headers=headers, json=payload, timeout=cfg["timeout"])
                 _logger.info("[DEPAY][create_qr] response status=%s body=%s", response.status_code, response.text[:400])
                 if response.status_code == 404:
+                    # Solo hacer fallback si el endpoint no existe (sin cuerpo JSON con código de error de negocio).
+                    try:
+                        err_body = response.json()
+                    except Exception:
+                        err_body = {}
+                    if err_body.get("code") or err_body.get("message"):
+                        # Depay devolvió un 404 de negocio (ej: país no soportado). No hacer fallback.
+                        _logger.error(
+                            "Depay QR business error [404] url=%s body=%s",
+                            url,
+                            response.text[:500],
+                        )
+                        response.raise_for_status()
                     _logger.warning("Depay endpoint not found (%s), trying fallback if available.", url)
                     last_error = requests.HTTPError(f"404 Client Error: Not Found for url: {url}", response=response)
                     continue
@@ -188,28 +201,43 @@ class DepayApiService(models.AbstractModel):
         response.raise_for_status()
         return response.json()
 
+    @staticmethod
+    def extract_status(payload):
+        data = payload or {}
+        if not isinstance(data, dict):
+            return ""
+        return (
+            data.get("status")
+            or data.get("order_status")
+            or data.get("orderStatus")
+            or data.get("state")
+            or ""
+        )
+
     def map_depay_status(self, status, message=""):
         status = (status or "").upper()
         message = (message or "").lower()
 
-        if status == "COMPLETED":
+        if status in {"COMPLETED", "PAID", "SUCCESS", "SUCCEEDED", "APPROVED"}:
             return "paid"
-        if status == "FAILED":
+        if status in {"FAILED", "REJECTED", "DECLINED", "ERROR"}:
             return "failed"
-        if status == "CANCELED":
+        if status in {"CANCELED", "CANCELLED"}:
             if "expired" in message:
                 return "expired"
             return "cancelled"
-        if status in {"CREATED", "WAITING_AMOUNT"}:
+        if status in {"EXPIRED", "TIMEOUT", "TIMED_OUT"}:
+            return "expired"
+        if status in {"CREATED", "WAITING_AMOUNT", "PENDING", "PROCESSING", "IN_PROGRESS"}:
             return "pending"
 
         _logger.warning("Unknown Depay status: %s", status)
         return "pending"
 
-    def validate_callback_signature(self, raw_body, signature_header):
-        cfg = self._config()
-        customer_uuid = cfg["customer_uuid"]
-        api_key = cfg["api_key"]
+    def validate_callback_signature(self, raw_body, signature_header, provider_config=None):
+        cfg = self._assert_config(provider_config=provider_config)
+        customer_uuid = cfg.get("customer_uuid")
+        api_key = cfg.get("api_key")
         if not signature_header or not customer_uuid or not api_key:
             return False
 

@@ -1,12 +1,21 @@
 import uuid
 import json
+import logging
 
 from odoo import http
 from odoo.http import request
 
 
+_logger = logging.getLogger(__name__)
+
+
 class SurpayInternalSaleController(http.Controller):
     FINAL_STATES = {"paid", "failed", "cancelled", "expired"}
+    QR_FROM_OPTIONS = (
+        ("AR", "Argentina", "🇦🇷"),
+        ("BR", "Brasil", "🇧🇷"),
+        ("PE", "Peru", "🇵🇪"),
+    )
 
     def _odoo_return_url(self):
         """Build a stable backend URL to avoid returning to the last act_url state."""
@@ -42,7 +51,13 @@ class SurpayInternalSaleController(http.Controller):
             }
         )
 
-    def _create_depay_intent(self, provider_config, amount_clp, concept, email):
+    @classmethod
+    def _normalize_qr_from(cls, value):
+        code = (value or "").strip().upper()
+        allowed = {item[0] for item in cls.QR_FROM_OPTIONS}
+        return code if code in allowed else ""
+
+    def _create_depay_intent(self, provider_config, amount_clp, concept, email, qr_from):
         if "surpay.payment.intent" not in request.env or "surpay.depay.api" not in request.env:
             return {
                 "error": "El módulo de Depay no está disponible."
@@ -84,6 +99,8 @@ class SurpayInternalSaleController(http.Controller):
                 "notification_url": callback_url,
                 "expires_at": expires_at,
                 "concept": concept,
+                "qr_from": qr_from,
+                "provider_config_id": provider_config.id,
             }
         )
 
@@ -91,7 +108,7 @@ class SurpayInternalSaleController(http.Controller):
             "amount": amount_to_provider,
             "local_currency": "CLP",
             "local_country": "CL",
-            "qr_from": "AR",
+            "qr_from": qr_from,
             "external_reference": order_id,
             "notification_url": callback_url,
         }
@@ -164,6 +181,8 @@ class SurpayInternalSaleController(http.Controller):
         values = {
             "provider_configs": configs,
             "default_provider_config_id": configs[:1].id if configs else False,
+            "qr_from_options": self.QR_FROM_OPTIONS,
+            "default_qr_from": "AR",
             "odoo_return_url": self._odoo_return_url(),
         }
         return request.render("surpay_base.new_sale_page", values)
@@ -181,6 +200,7 @@ class SurpayInternalSaleController(http.Controller):
         concept = (payload.get("concept") or "").strip()
         email = (payload.get("email") or "").strip()
         provider_config_id = payload.get("provider_config_id")
+        qr_from = self._normalize_qr_from(payload.get("qr_from"))
 
         try:
             amount_clp = float(amount_clp)
@@ -193,6 +213,8 @@ class SurpayInternalSaleController(http.Controller):
             return {"error": {"message": "El código de referencia (concepto) es obligatorio."}}
         if not provider_config_id:
             return {"error": {"message": "Selecciona una plataforma de pago."}}
+        if not qr_from:
+            return {"error": {"message": "Selecciona un pais para origen QR."}}
 
         provider_config = request.env["surpay.provider.config"].sudo().browse(int(provider_config_id))
         if not provider_config.exists() or provider_config.state != "active":
@@ -205,7 +227,7 @@ class SurpayInternalSaleController(http.Controller):
                 }
             }
 
-        result = self._create_depay_intent(provider_config, amount_clp, concept, email)
+        result = self._create_depay_intent(provider_config, amount_clp, concept, email, qr_from)
         if result.get("error"):
             return {"error": {"message": result["error"]}}
 
@@ -244,8 +266,11 @@ class SurpayInternalSaleController(http.Controller):
                     tx.provider_payment_id,
                     provider_config=tx.provider_config_id,
                 )
+                depay_service = request.env["surpay.depay.api"].sudo()
+                depay_raw_status = depay_service.extract_status(provider_status)
                 mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
-                    provider_status.get("status")
+                    depay_raw_status,
+                    provider_status.get("message") or provider_status.get("detail") or "",
                 )
                 tx.write(
                     {
@@ -261,8 +286,13 @@ class SurpayInternalSaleController(http.Controller):
                     merged.update(provider_status or {})
                     intent.write({"state": mapped_state, "provider_response_payload": merged})
                     intent.sync_transaction()
-            except Exception:
-                pass
+            except Exception as exc:
+                _logger.warning(
+                    "No se pudo refrescar estado Depay para order_id=%s provider_payment_id=%s: %s",
+                    tx.order_id,
+                    tx.provider_payment_id,
+                    exc,
+                )
 
         done = tx.state in self.FINAL_STATES
         return {

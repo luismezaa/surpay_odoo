@@ -14,3 +14,13 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: l10n_cl_surpay_depay
+#: code:addons/l10n_cl_surpay_depay/controllers/api.py:0
+msgid "qr_from must be one of: AR, BR, PE."
+msgstr "qr_from debe ser uno de: AR, BR, PE."
+
+#. module: l10n_cl_surpay_depay
+#: code:addons/l10n_cl_surpay_depay/controllers/api.py:0
+msgid "No active Depay provider configuration found."
+msgstr "No se encontro una configuracion activa de Depay."

@@ -9,6 +9,7 @@
                 <field name="client_id"/>
                 <field name="partner_id"/>
                 <field name="ip_filter_mode"/>
+                <field name="provider_config_id"/>
                 <field name="default_local_currency"/>
                 <field name="default_local_country"/>
                 <field name="default_qr_from"/>
@@ -30,6 +31,7 @@
                             <field name="client_id"/>
                             <field name="client_secret" password="True"/>
                             <field name="partner_id"/>
+                            <field name="provider_config_id"/>
                             <field name="webhook_url"/>
                             <field name="webhook_secret" password="True"/>
                         </group>

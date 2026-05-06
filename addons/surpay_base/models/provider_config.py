@@ -72,6 +72,12 @@ class SurpayProviderConfig(models.Model):
         required=False,
         help="URL webhook para callbacks del proveedor (sin cifrar)",
     )
+    logo = fields.Image(
+        string="Logo",
+        max_width=512,
+        max_height=512,
+        help="Logo para mostrar en la venta interna.",
+    )
 
     # Metadata
     notes = fields.Text(help="Notas internas sobre esta configuracion")
@@ -112,12 +118,25 @@ class SurpayProviderConfig(models.Model):
                     ("id", "!=", record.id),
                 ], limit=1)
                 if duplicate:
-                    raise ValidationError(_(
-                        "El proveedor '%s' ya tiene una configuracion activa (%s). "
-                        "Desactívala antes de activar otra.",
-                        dict(self.PROVIDERS).get(record.provider, record.provider),
-                        dict(self.ENVIRONMENTS).get(duplicate.environment, duplicate.environment),
-                    ))
+                    provider_label = dict(self.PROVIDERS).get(record.provider, record.provider)
+                    env_label = dict(self.ENVIRONMENTS).get(duplicate.environment, duplicate.environment)
+                    raise ValidationError(
+                        _("El proveedor '%s' ya tiene una configuracion activa (%s). "
+                          "Desactívala antes de activar otra.")
+                        % (provider_label, env_label)
+                    )
+
+    @api.model
+    def resolve_provider_config(self, provider="depay", include_inactive=False):
+        domain = [("provider", "=", provider)]
+        if not include_inactive:
+            domain.append(("state", "=", "active"))
+        config = self.sudo().search(domain + [("environment", "=", "production")], limit=1)
+        if not config:
+            config = self.sudo().search(domain + [("environment", "=", "sandbox")], limit=1)
+        if not config:
+            config = self.sudo().search(domain, limit=1)
+        return config
 
     @staticmethod
     def _get_encryption_key():

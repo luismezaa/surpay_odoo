@@ -47,8 +47,10 @@ class SurpayPaymentIntent(models.Model):
         default="external",
         index=True,
     )
+    qr_from = fields.Char(help="Codigo ISO 3166-1 alpha-2 usado como origen del QR.")
 
     client_id = fields.Many2one("surpay.api.client", required=True, ondelete="restrict", index=True)
+    provider_config_id = fields.Many2one("surpay.provider.config", ondelete="set null", index=True)
     partner_id = fields.Many2one("res.partner", ondelete="set null", index=True)
     notification_url = fields.Char()
     expires_at = fields.Datetime(required=True)
@@ -116,6 +118,7 @@ class SurpayPaymentIntent(models.Model):
             "commission_amount": self.commission_amount,
             "amount": self.amount,
             "currency": self.currency,
+            "qr_from": self.qr_from,
             "expires_at": self.expires_at,
             "payment_url": self.payment_link_url(),
         }
@@ -141,6 +144,7 @@ class SurpayPaymentIntent(models.Model):
                 "order_id": self.order_id,
                 "external_order_id": self.external_order_id,
                 "provider": self.provider,
+                "provider_config_id": self.provider_config_id.id,
                 "provider_payment_id": self.provider_payment_id,
                 "state": self.state,
                 "base_amount": self.base_amount,
@@ -149,6 +153,7 @@ class SurpayPaymentIntent(models.Model):
                 "commission_rule_id": self.commission_rule_id.id,
                 "amount": self.amount,
                 "currency": self.currency,
+                "qr_from": self.qr_from,
                 "client_id": self.client_id.id,
                 "partner_id": (self.partner_id or self.client_id.partner_id).id,
                 "sales_channel": self.source_channel or "external",
@@ -167,6 +172,7 @@ class SurpayPaymentIntent(models.Model):
             vals = {
                 "external_order_id": rec.external_order_id,
                 "provider": rec.provider,
+                "provider_config_id": rec.provider_config_id.id,
                 "provider_payment_id": rec.provider_payment_id,
                 "state": rec.state,
                 "base_amount": rec.base_amount,
@@ -175,6 +181,7 @@ class SurpayPaymentIntent(models.Model):
                 "commission_rule_id": rec.commission_rule_id.id,
                 "amount": rec.amount,
                 "currency": rec.currency,
+                "qr_from": rec.qr_from,
                 "client_id": rec.client_id.id,
                 "partner_id": (rec.partner_id or rec.client_id.partner_id).id,
                 "sales_channel": rec.source_channel or "external",

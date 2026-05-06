@@ -14,3 +14,38 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: surpay_base
+#: model:ir.model.fields,field_description:surpay_base.field_surpay_provider_config__logo
+msgid "Logo"
+msgstr "Logo"
+
+#. module: surpay_base
+#: model:ir.model.fields,help:surpay_base.field_surpay_provider_config__logo
+msgid "Logo para mostrar en la venta interna."
+msgstr "Logo para mostrar en la venta interna."
+
+#. module: surpay_base
+#: model:ir.model.fields,field_description:surpay_base.field_surpay_api_client__provider_config_id
+msgid "Configuracion proveedor (externa)"
+msgstr "Configuracion proveedor (externa)"
+
+#. module: surpay_base
+#: model:ir.model.fields,help:surpay_base.field_surpay_api_client__provider_config_id
+msgid "Si se define, esta configuracion se usa para ventas externas de este cliente API."
+msgstr "Si se define, esta configuracion se usa para ventas externas de este cliente API."
+
+#. module: surpay_base
+#: code:addons/surpay_base/models/api_client.py:0
+msgid "Solo se permite configuracion de proveedor Depay para este cliente API."
+msgstr "Solo se permite configuracion de proveedor Depay para este cliente API."
+
+#. module: surpay_base
+#: model:ir.model.fields,field_description:surpay_base.field_surpay_payment_transaction__qr_from
+msgid "Pais origen QR"
+msgstr "Pais origen QR"
+
+#. module: surpay_base
+#: code:addons/surpay_base/controllers/internal_sale.py:0
+msgid "Selecciona un pais para origen QR."
+msgstr "Selecciona un pais para origen QR."

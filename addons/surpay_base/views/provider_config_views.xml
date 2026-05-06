@@ -35,6 +35,7 @@
                         <group string="Datos del proveedor">
                             <field name="provider" />
                             <field name="environment" />
+                            <field name="logo" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
                         </group>
                         <group string="Metadatos">
                             <field name="create_date" />

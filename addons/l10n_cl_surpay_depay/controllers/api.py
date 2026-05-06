@@ -16,6 +16,8 @@ _logger = logging.getLogger(__name__)
 
 
 class SurpayApiController(http.Controller):
+    ALLOWED_QR_FROM = {"AR", "BR", "PE"}
+
     @staticmethod
     def _state_code(state):
         mapping = {
@@ -36,6 +38,15 @@ class SurpayApiController(http.Controller):
             if parts:
                 return parts[0]
         return request.httprequest.remote_addr
+
+    @classmethod
+    def _normalize_country_code(cls, value):
+        return (value or "").strip().upper()
+
+    def _resolve_provider_config_for_client(self, client, provider="depay"):
+        if client.provider_config_id and client.provider_config_id.provider == provider:
+            return client.provider_config_id.sudo()
+        return request.env["surpay.provider.config"].sudo().resolve_provider_config(provider=provider)
 
     @staticmethod
     def _error(status_code, code, message):
@@ -166,14 +177,17 @@ class SurpayApiController(http.Controller):
         external_order_id = payload.get("external_order_id")
         concept = payload.get("concept")
         expires_in = payload.get("expires_in")
-        local_country = payload.get("local_country") or client.default_local_country
-        qr_from = payload.get("qr_from") or client.default_qr_from
+        local_country = self._normalize_country_code(payload.get("local_country") or client.default_local_country)
+        qr_from = self._normalize_country_code(payload.get("qr_from") or client.default_qr_from)
 
         if provider != "depay":
             return self._error(400, "unsupported_provider", "Only depay provider is enabled in this module.")
 
         if amount is None or not currency:
             return self._error(400, "invalid_payload", "amount and currency are required.")
+
+        if qr_from and qr_from not in self.ALLOWED_QR_FROM:
+            return self._error(400, "invalid_qr_from", "qr_from must be one of: AR, BR, PE.")
 
         # Ensure amount is numeric (float)
         try:
@@ -226,6 +240,10 @@ class SurpayApiController(http.Controller):
             return self._error(400, "invalid_expiration", "expires_in must be numeric within allowed range.")
 
         order_id = intent_model.generate_order_id()
+        provider_config = self._resolve_provider_config_for_client(client, provider="depay")
+        if not provider_config:
+            return self._error(400, "provider_not_configured", "No active Depay provider configuration found.")
+
         callback_url = request.env["ir.config_parameter"].sudo().get_param(
             "web.base.url", ""
         ) + "/api/v1/webhooks/providers/depay"
@@ -245,9 +263,11 @@ class SurpayApiController(http.Controller):
                 "state": "created",
                 "idempotency_key": idempotency_key,
                 "client_id": client.id,
+                "provider_config_id": provider_config.id,
                 "notification_url": callback_url,
                 "expires_at": expires_at,
                 "concept": concept,
+                "qr_from": qr_from,
             }
         )
         transaction = intent.ensure_transaction()
@@ -267,7 +287,9 @@ class SurpayApiController(http.Controller):
             depay_payload["local_country"] = local_country
         if qr_from:
             depay_payload["qr_from"] = qr_from
-        pos_id = cfg.get_param("l10n_cl_surpay_depay.pos_id", "")
+        pos_id = provider_config.get_credentials().get("pos_id")
+        if not pos_id:
+            pos_id = cfg.get_param("l10n_cl_surpay_depay.pos_id", "")
         if not pos_id:
             depay_cfg = request.env["surpay.depay.api"].sudo()._config()
             pos_id = depay_cfg.get("pos_id", "")
@@ -275,7 +297,10 @@ class SurpayApiController(http.Controller):
             depay_payload["pos_external_reference"] = pos_id
 
         try:
-            depay_response = request.env["surpay.depay.api"].sudo().create_qr(depay_payload)
+            depay_response = request.env["surpay.depay.api"].sudo().create_qr(
+                depay_payload,
+                provider_config=provider_config,
+            )
         except Exception as exc:
             intent.write(
                 {
@@ -376,9 +401,15 @@ class SurpayApiController(http.Controller):
 
         if intent.provider_payment_id and intent.state not in ("paid", "failed", "expired", "cancelled"):
             try:
-                provider_status = request.env["surpay.depay.api"].sudo().get_payment_status(intent.provider_payment_id)
+                provider_status = request.env["surpay.depay.api"].sudo().get_payment_status(
+                    intent.provider_payment_id,
+                    provider_config=intent.provider_config_id,
+                )
+                depay_service = request.env["surpay.depay.api"].sudo()
+                depay_raw_status = depay_service.extract_status(provider_status)
                 mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
-                    provider_status.get("status")
+                    depay_raw_status,
+                    provider_status.get("message") or provider_status.get("detail") or "",
                 )
                 existing_payload = dict(intent.provider_response_payload or {})
                 merged_payload = dict(existing_payload)
@@ -430,9 +461,15 @@ class SurpayApiController(http.Controller):
 
         if intent.provider_payment_id:
             try:
-                provider_status = request.env["surpay.depay.api"].sudo().get_payment_status(intent.provider_payment_id)
+                provider_status = request.env["surpay.depay.api"].sudo().get_payment_status(
+                    intent.provider_payment_id,
+                    provider_config=intent.provider_config_id,
+                )
+                depay_service = request.env["surpay.depay.api"].sudo()
+                depay_raw_status = depay_service.extract_status(provider_status)
                 mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
-                    provider_status.get("status")
+                    depay_raw_status,
+                    provider_status.get("message") or provider_status.get("detail") or "",
                 )
                 existing_payload = dict(intent.provider_response_payload or {})
                 merged_payload = dict(existing_payload)
@@ -460,14 +497,6 @@ class SurpayApiController(http.Controller):
     )
     def depay_webhook(self):
         raw_body = self._raw_body()
-        signature_header = request.httprequest.headers.get("signature")
-        signature_valid = request.env["surpay.depay.api"].sudo().validate_callback_signature(
-            raw_body, signature_header
-        )
-
-        if not signature_valid:
-            return self._error(401, "invalid_provider_signature", "Invalid provider callback signature.")
-
         try:
             payload = json.loads(raw_body.decode("utf-8") or "{}")
         except json.JSONDecodeError:
@@ -492,8 +521,18 @@ class SurpayApiController(http.Controller):
         if not intent:
             return self._error(404, "not_found", "Payment intent not found for provider order_id.")
 
+        signature_header = request.httprequest.headers.get("signature")
+        signature_valid = request.env["surpay.depay.api"].sudo().validate_callback_signature(
+            raw_body,
+            signature_header,
+            provider_config=intent.provider_config_id,
+        )
+        if not signature_valid:
+            return self._error(401, "invalid_provider_signature", "Invalid provider callback signature.")
+
         mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
-            payload.get("status"), payload.get("message")
+            payload.get("status") or payload.get("order_status") or payload.get("orderStatus") or payload.get("state"),
+            payload.get("message") or payload.get("detail"),
         )
         intent.write(
             {

@@ -71,6 +71,65 @@
                         padding: 0 12px;
                         font-size: 15px;
                     }
+                    .provider-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fill, minmax(150px, 150px));
+                        gap: 12px;
+                        justify-content: start;
+                    }
+                    .provider-card {
+                        border: 1px solid #c5cfda;
+                        border-radius: 12px;
+                        padding: 10px 12px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: flex-start;
+                        min-height: 128px;
+                        cursor: pointer;
+                        background: #fff;
+                        transition: all .12s ease;
+                    }
+                    .provider-card:hover {
+                        border-color: #7aa5cf;
+                        box-shadow: 0 8px 18px rgba(11, 83, 148, 0.08);
+                    }
+                    .provider-radio {
+                        width: 18px;
+                        height: 18px;
+                        margin-top: 8px;
+                        order: 2;
+                        accent-color: var(--primary);
+                    }
+                    .provider-card-body {
+                        order: 1;
+                        width: 100%;
+                        display: grid;
+                        place-items: center;
+                        border-radius: 8px;
+                        padding: 8px;
+                    }
+                    .provider-logo {
+                        width: 72px;
+                        height: 72px;
+                        border-radius: 10px;
+                        border: 1px solid #d7e0ea;
+                        object-fit: contain;
+                        object-position: center;
+                        background: #f1f5f9;
+                        padding: 4px;
+                    }
+                    .provider-logo.fallback {
+                        display: grid;
+                        place-items: center;
+                        font-weight: 700;
+                        color: #355374;
+                    }
+                    .provider-radio:checked + .provider-card-body {
+                        outline: 2px solid #0b5394;
+                        outline-offset: 1px;
+                        border-radius: 8px;
+                    }
                     .actions {
                         margin-top: 18px;
                         display: flex;
@@ -123,11 +182,36 @@
                             <input id="email" type="email" placeholder="cliente@correo.com"/>
                         </div>
                         <div class="field">
-                            <label for="provider_config_id">Plataforma de pago</label>
-                            <select id="provider_config_id">
+                            <label>Plataforma de pago</label>
+                            <div class="provider-grid">
                                 <t t-foreach="provider_configs" t-as="cfg">
-                                    <option t-att-value="cfg.id" t-att-selected="cfg.id == default_provider_config_id and 'selected' or None">
-                                        <t t-esc="cfg.provider.upper()"/> - <t t-esc="cfg.environment"/>
+                                    <label class="provider-card">
+                                        <input
+                                            class="provider-radio"
+                                            type="radio"
+                                            name="provider_config_id"
+                                            t-att-value="cfg.id"
+                                            t-att-checked="cfg.id == default_provider_config_id and 'checked' or None"
+                                        />
+                                        <div class="provider-card-body">
+                                            <t t-if="cfg.logo">
+                                                <img class="provider-logo" t-att-src="'/web/image/surpay.provider.config/%s/logo' % cfg.id" t-att-alt="cfg.display_name"/>
+                                            </t>
+                                            <t t-else="">
+                                                <div class="provider-logo fallback"><t t-esc="(cfg.provider or '?').upper()[:2]"/></div>
+                                            </t>
+                                        </div>
+                                    </label>
+                                </t>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="qr_from">Pais origen</label>
+                            <select id="qr_from">
+                                <t t-foreach="qr_from_options" t-as="opt">
+                                    <option t-att-value="opt[0]" t-att-selected="opt[0] == default_qr_from and 'selected' or None">
+                                        <t t-esc="opt[2]"/> <t t-esc="opt[1]"/>
                                     </option>
                                 </t>
                             </select>
@@ -160,7 +244,9 @@
                             var amount = parseFloat(getVal("amount_clp") || "0");
                             var concept = (getVal("concept") || "").trim();
                             var email = (getVal("email") || "").trim();
-                            var providerConfigId = parseInt(getVal("provider_config_id"), 10);
+                            var qrFrom = (getVal("qr_from") || "").toUpperCase().trim();
+                            var providerRadio = document.querySelector('input[name="provider_config_id"]:checked');
+                            var providerConfigId = providerRadio ? parseInt(providerRadio.value, 10) : 0;
 
                             if (!(amount > 0)) {
                                 setMessage("Ingresa un precio válido en pesos.");
@@ -172,6 +258,10 @@
                             }
                             if (!providerConfigId) {
                                 setMessage("Selecciona una plataforma de pago.");
+                                return;
+                            }
+                            if (!qrFrom) {
+                                setMessage("Selecciona un pais para origen QR.");
                                 return;
                             }
 
@@ -187,6 +277,7 @@
                                     concept: concept,
                                     email: email,
                                     provider_config_id: providerConfigId,
+                                    qr_from: qrFrom,
                                 }),
                             })
                                 .then(function (res) { return res.json(); })

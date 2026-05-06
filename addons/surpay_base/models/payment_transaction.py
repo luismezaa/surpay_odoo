@@ -36,6 +36,7 @@ class SurpayPaymentTransaction(models.Model):
     )
     amount = fields.Float(string="Monto", required=True)
     currency = fields.Char(string="Moneda", required=True)
+    qr_from = fields.Char(string="Pais origen QR", help="Codigo ISO 3166-1 alpha-2 usado como origen del QR.")
     concept = fields.Char(string="Concepto", index=True)
     customer_email = fields.Char(string="Email cliente")
     partner_id = fields.Many2one("res.partner", string="Socio", ondelete="set null", index=True)
