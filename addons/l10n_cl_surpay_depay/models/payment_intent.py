@@ -40,6 +40,9 @@ class SurpayPaymentIntent(models.Model):
     commission_rule_id = fields.Many2one("surpay.commission.rule", ondelete="set null", index=True)
     amount = fields.Float(required=True)
     currency = fields.Char(required=True)
+    qr_currency = fields.Char(help="Moneda final del QR devuelta por el proveedor.")
+    qr_converted_amount = fields.Float(help="Monto convertido al tipo de cambio devuelto por el proveedor.")
+    qr_exchange_rate = fields.Float(digits=(16, 8))
     idempotency_key = fields.Char(required=True, index=True)
     source_channel = fields.Selection(
         selection=[("external", "Externo"), ("internal", "Interno")],
@@ -118,6 +121,9 @@ class SurpayPaymentIntent(models.Model):
             "commission_amount": self.commission_amount,
             "amount": self.amount,
             "currency": self.currency,
+            "qr_currency": self.qr_currency,
+            "qr_converted_amount": self.qr_converted_amount,
+            "qr_exchange_rate": self.qr_exchange_rate,
             "qr_from": self.qr_from,
             "expires_at": self.expires_at,
             "payment_url": self.payment_link_url(),
@@ -153,6 +159,9 @@ class SurpayPaymentIntent(models.Model):
                 "commission_rule_id": self.commission_rule_id.id,
                 "amount": self.amount,
                 "currency": self.currency,
+                "qr_currency": self.qr_currency,
+                "qr_converted_amount": self.qr_converted_amount,
+                "qr_exchange_rate": self.qr_exchange_rate,
                 "qr_from": self.qr_from,
                 "client_id": self.client_id.id,
                 "partner_id": (self.partner_id or self.client_id.partner_id).id,
@@ -181,6 +190,9 @@ class SurpayPaymentIntent(models.Model):
                 "commission_rule_id": rec.commission_rule_id.id,
                 "amount": rec.amount,
                 "currency": rec.currency,
+                "qr_currency": rec.qr_currency,
+                "qr_converted_amount": rec.qr_converted_amount,
+                "qr_exchange_rate": rec.qr_exchange_rate,
                 "qr_from": rec.qr_from,
                 "client_id": rec.client_id.id,
                 "partner_id": (rec.partner_id or rec.client_id.partner_id).id,

@@ -329,7 +329,13 @@ class SurpayApiController(http.Controller):
             or depay_response.get("state")
             or "PENDING"
         )
-        mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(depay_raw_status)
+        depay_service = request.env["surpay.depay.api"].sudo()
+        mapped_state = depay_service.map_depay_status(depay_raw_status)
+        qr_quote = depay_service.extract_qr_quote(
+            depay_response,
+            fallback_currency=currency,
+            fallback_amount=amount_to_provider,
+        )
 
         intent.write(
             {
@@ -337,6 +343,7 @@ class SurpayApiController(http.Controller):
                 "state": mapped_state,
                 "provider_request_payload": provider_request_payload,
                 "provider_response_payload": depay_response,
+                **qr_quote,
             }
         )
         intent.sync_transaction()
@@ -424,6 +431,11 @@ class SurpayApiController(http.Controller):
                     {
                         "state": mapped_state,
                         "provider_response_payload": merged_payload,
+                        **depay_service.extract_qr_quote(
+                            merged_payload,
+                            fallback_currency=intent.currency,
+                            fallback_amount=intent.amount,
+                        ),
                     }
                 )
                 intent.sync_transaction()
@@ -484,6 +496,11 @@ class SurpayApiController(http.Controller):
                     {
                         "state": mapped_state,
                         "provider_response_payload": merged_payload,
+                        **depay_service.extract_qr_quote(
+                            merged_payload,
+                            fallback_currency=intent.currency,
+                            fallback_amount=intent.amount,
+                        ),
                     }
                 )
                 intent.sync_transaction()
@@ -534,14 +551,25 @@ class SurpayApiController(http.Controller):
         if not signature_valid:
             return self._error(401, "invalid_provider_signature", "Invalid provider callback signature.")
 
-        mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
+        depay_service = request.env["surpay.depay.api"].sudo()
+        mapped_state = depay_service.map_depay_status(
             payload.get("status") or payload.get("order_status") or payload.get("orderStatus") or payload.get("state"),
             payload.get("message") or payload.get("detail"),
         )
+        existing_payload = dict(intent.provider_response_payload or {})
+        merged_payload = dict(existing_payload)
+        merged_payload.update(payload or {})
+        if not (merged_payload.get("qr_data") or merged_payload.get("qr_code")):
+            merged_payload["qr_data"] = existing_payload.get("qr_data") or existing_payload.get("qr_code")
         intent.write(
             {
                 "state": mapped_state,
-                "provider_response_payload": payload,
+                "provider_response_payload": merged_payload,
+                **depay_service.extract_qr_quote(
+                    merged_payload,
+                    fallback_currency=intent.currency,
+                    fallback_amount=intent.amount,
+                ),
             }
         )
         transaction = intent.ensure_transaction()

@@ -151,7 +151,13 @@ class SurpayInternalSaleController(http.Controller):
             or depay_response.get("state")
             or "PENDING"
         )
-        mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(depay_raw_status)
+        depay_service = request.env["surpay.depay.api"].sudo()
+        mapped_state = depay_service.map_depay_status(depay_raw_status)
+        qr_quote = depay_service.extract_qr_quote(
+            depay_response,
+            fallback_currency="CLP",
+            fallback_amount=amount_to_provider,
+        )
 
         intent.write(
             {
@@ -159,6 +165,7 @@ class SurpayInternalSaleController(http.Controller):
                 "state": mapped_state,
                 "provider_request_payload": provider_request_payload,
                 "provider_response_payload": depay_response,
+                **qr_quote,
             }
         )
         intent.sync_transaction()

@@ -10,6 +10,14 @@
                 <field name="external_order_id"/>
                 <field name="concept"/>
                 <field name="state"/>
+                <button
+                    name="action_download_zebra_voucher"
+                    type="object"
+                    string="Voucher TXT"
+                    class="btn-link"
+                    icon="fa-download"
+                    invisible="state != 'paid'"
+                />
                 <field name="sales_channel"/>
                 <field name="partner_id"/>
                 <field name="client_id"/>
@@ -19,6 +27,9 @@
                 <field name="commission_amount"/>
                 <field name="amount"/>
                 <field name="currency"/>
+                <field name="qr_converted_amount" string="Monto Destino"/>
+                <field name="qr_currency" string="Moneda Destino"/>
+                <field name="qr_exchange_rate" string="Tipo Cambio"/>
                 <field name="transferred"/>
                 <field name="cash_closure_id"/>
             </list>
@@ -56,6 +67,9 @@
                             <field name="commission_rule_id" readonly="1"/>
                             <field name="amount" readonly="1"/>
                             <field name="currency" readonly="1"/>
+                            <field name="qr_converted_amount" readonly="1"/>
+                            <field name="qr_currency" readonly="1"/>
+                            <field name="qr_exchange_rate" readonly="1"/>
                         </group>
                         <group string="Liquidacion">
                             <field name="transferred" readonly="1"/>

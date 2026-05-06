@@ -214,6 +214,64 @@ class DepayApiService(models.AbstractModel):
             or ""
         )
 
+    @staticmethod
+    def _as_float(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def extract_qr_quote(self, payload, fallback_currency="", fallback_amount=0.0):
+        data = payload if isinstance(payload, dict) else {}
+        candidate_blocks = [
+            data,
+            data.get("quote") if isinstance(data.get("quote"), dict) else {},
+            data.get("conversion") if isinstance(data.get("conversion"), dict) else {},
+            data.get("exchange") if isinstance(data.get("exchange"), dict) else {},
+            data.get("payment") if isinstance(data.get("payment"), dict) else {},
+        ]
+
+        currency_keys = ["user_currency", "local_currency", "currency", "qr_currency", "target_currency"]
+        amount_keys = ["user_amount", "local_amount", "converted_amount", "amount_local", "amount_user"]
+        rate_keys = ["exchange_rate", "fx_rate", "conversion_rate", "rate"]
+
+        qr_currency = ""
+        qr_amount = None
+        qr_rate = None
+
+        for block in candidate_blocks:
+            if not qr_currency:
+                for key in currency_keys:
+                    value = block.get(key)
+                    if value:
+                        qr_currency = str(value).upper()
+                        break
+            if qr_amount is None:
+                for key in amount_keys:
+                    value = self._as_float(block.get(key))
+                    if value is not None:
+                        qr_amount = value
+                        break
+            if qr_rate is None:
+                for key in rate_keys:
+                    value = self._as_float(block.get(key))
+                    if value is not None:
+                        qr_rate = value
+                        break
+
+        if qr_currency == "":
+            qr_currency = (fallback_currency or "").upper()
+        if qr_amount is None:
+            qr_amount = fallback_amount or 0.0
+        if qr_rate is None and fallback_amount:
+            qr_rate = (qr_amount / fallback_amount) if fallback_amount else 0.0
+
+        return {
+            "qr_currency": qr_currency,
+            "qr_converted_amount": qr_amount,
+            "qr_exchange_rate": qr_rate or 0.0,
+        }
+
     def map_depay_status(self, status, message=""):
         status = (status or "").upper()
         message = (message or "").lower()
