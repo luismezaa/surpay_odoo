@@ -71,7 +71,7 @@
     <menuitem
         id="surpay_commission_rule_menu"
         name="Reglas de comision"
-        parent="surpay_menu_root"
+        parent="surpay_configuration_menu"
         action="surpay_commission_rule_action"
         groups="surpay_base.group_surpay_manager,base.group_system"
         sequence="4"

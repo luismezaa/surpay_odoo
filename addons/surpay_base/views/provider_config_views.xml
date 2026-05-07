@@ -107,11 +107,19 @@
         sequence="60"
     />
 
+    <menuitem
+        id="surpay_configuration_menu"
+        name="Configuracion"
+        parent="surpay_menu_root"
+        groups="surpay_base.group_surpay_manager,base.group_system"
+        sequence="20"
+    />
+
     <!-- Menu Item -->
     <menuitem
         id="surpay_provider_config_menu"
         name="Configuracion de proveedor"
-        parent="surpay_menu_root"
+        parent="surpay_configuration_menu"
         action="surpay_provider_config_action"
         groups="surpay_base.group_surpay_manager,base.group_system"
         sequence="1"

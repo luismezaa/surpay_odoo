@@ -78,8 +78,9 @@
     <menuitem
         id="surpay_api_client_menu"
         name="Clientes API"
-        parent="surpay_menu_root"
+        parent="surpay_configuration_menu"
         action="surpay_api_client_action"
+        groups="surpay_base.group_surpay_manager,base.group_system"
         sequence="2"
     />
 </odoo>
