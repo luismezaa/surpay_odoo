@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# PgBouncer configuration (credentials)
+config/pgbouncer.ini
+config/pgbouncer_users.txt
+
 # Local backups and certificates
 backups/*
 !backups/.gitkeep
