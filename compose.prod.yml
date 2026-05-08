@@ -43,6 +43,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URLS: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB},postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/postgres
+      AUTH_TYPE: plain
       POOL_MODE: transaction
       MAX_CLIENT_CONN: "1000"
       DEFAULT_POOL_SIZE: "25"
