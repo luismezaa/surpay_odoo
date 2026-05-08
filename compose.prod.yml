@@ -80,6 +80,12 @@ services:
       USER: ${POSTGRES_USER}
       PASSWORD: ${POSTGRES_PASSWORD}
       ODOO_RC: /etc/odoo/odoo.conf
+      SURPAY_ENCRYPTION_KEY: ${SURPAY_ENCRYPTION_KEY}
+      ODOO_ADMIN_PASSWD: ${ODOO_ADMIN_PASSWD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    entrypoint: ["/docker-entrypoint-generate-conf.sh"]
     command:
       - odoo
       - -c
@@ -92,7 +98,7 @@ services:
     volumes:
       - odoo_data_prod:/var/lib/odoo
       - ./addons:/mnt/extra-addons:ro
-      - ./config/odoo.prod.conf:/etc/odoo/odoo.conf:ro
+      - ./config/odoo.prod.conf:/etc/odoo/odoo.conf.template:ro
       - ./backups:/backups
     ports:
       - "127.0.0.1:8069:8069"

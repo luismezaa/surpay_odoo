@@ -13,6 +13,8 @@ RUN npm install --prefix /tmp/npm-patch handlebars@^4.7.9 @babel/traverse@^7.23.
     && rm -rf /tmp/npm-patch ~/.npm
 
 COPY docker/requirements.txt /tmp/requirements.txt
+COPY docker/generate_conf.sh /docker-entrypoint-generate-conf.sh
+RUN chmod +x /docker-entrypoint-generate-conf.sh
 RUN if [ -s /tmp/requirements.txt ]; then \
       apt-get update \
       && apt-get install -y --no-install-recommends \
