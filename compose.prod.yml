@@ -30,7 +30,7 @@ services:
       - odoo_net_prod
 
   pgbounce:
-    image: pgbouncer/pgbouncer:latest
+    image: edoburu/pgbouncer:latest
     container_name: odoo_surpay_pgbounce_prod
     restart: unless-stopped
     security_opt:
@@ -42,16 +42,11 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASES_HOST: db
-      DATABASES_PORT: "5432"
-      DATABASES_NAME: ${POSTGRES_DB}
-      DATABASES_USER: ${POSTGRES_USER}
-      DATABASES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       POOL_MODE: transaction
       MAX_CLIENT_CONN: "1000"
       DEFAULT_POOL_SIZE: "25"
       RESERVE_POOL_SIZE: "5"
-      ADMIN_USERS: ${POSTGRES_USER}
     expose:
       - "6432"
     logging:

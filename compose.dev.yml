@@ -20,12 +20,15 @@ services:
       - odoo_net_dev
 
   pgbounce:
-    image: pgbouncer/pgbouncer:latest
+    image: edoburu/pgbouncer:latest
     container_name: odoo_surpay_pgbounce_dev
     restart: unless-stopped
-    volumes:
-      - ./config/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
-      - ./config/pgbouncer_users.txt:/etc/pgbouncer/users.txt:ro
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "25"
+      RESERVE_POOL_SIZE: "5"
     expose:
       - "6432"
     healthcheck:
