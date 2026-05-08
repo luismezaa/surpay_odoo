@@ -30,7 +30,7 @@ services:
       - odoo_net_prod
 
   pgbounce:
-    image: edoburu/pgbounce:1.21.0
+    image: bitnami/pgbouncer:1.21.0
     container_name: odoo_surpay_pgbounce_prod
     restart: unless-stopped
     security_opt:
@@ -42,16 +42,16 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASES_HOST: db
-      DATABASES_PORT: "5432"
-      DATABASES_NAME: ${POSTGRES_DB}
-      DATABASES_USER: ${POSTGRES_USER}
-      DATABASES_PASSWORD: ${POSTGRES_PASSWORD}
-      PGBOUNCE_POOL_MODE: transaction
-      PGBOUNCE_MAX_CLIENT_CONN: "1000"
-      PGBOUNCE_DEFAULT_POOL_SIZE: "25"
-      PGBOUNCE_RESERVE_POOL_SIZE: "5"
-      PGBOUNCE_IDLE_IN_TRANSACTION_SESSION_TIMEOUT: "30000"
+      PGBOUNCER_BACKEND_DATABASE_HOST: db
+      PGBOUNCER_BACKEND_DATABASE_PORT: "5432"
+      PGBOUNCER_BACKEND_DATABASE_NAME: ${POSTGRES_DB}
+      PGBOUNCER_BACKEND_DATABASE_USER: ${POSTGRES_USER}
+      PGBOUNCER_BACKEND_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "1000"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "25"
+      PGBOUNCER_RESERVE_POOL_SIZE: "5"
+      PGBOUNCER_IDLE_IN_TRANSACTION_SESSION_TIMEOUT: "30000"
     expose:
       - "6432"
     healthcheck:
