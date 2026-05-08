@@ -1,2 +1,0 @@
-"pgbounce" ""
-"${POSTGRES_USER}" "${POSTGRES_PASSWORD}"
