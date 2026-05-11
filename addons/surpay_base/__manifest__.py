@@ -5,7 +5,7 @@
     "category": "Tools",
     "author": "Surpay",
     "license": "LGPL-3",
-    "depends": ["base", "contacts", "mail"],
+    "depends": ["base", "contacts", "mail", "web"],
     "data": [
         "security/surpay_groups.xml",
         "security/ir.model.access.csv",
@@ -19,6 +19,7 @@
         "views/cash_closure_report_wizard_views.xml",
         "views/cash_closure_report_templates.xml",
         "views/internal_sale_templates.xml",
+        "views/pwa_templates.xml",
     ],
     "installable": True,
     "application": True,

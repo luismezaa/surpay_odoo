@@ -24,18 +24,15 @@ services:
     container_name: odoo_surpay_pgbounce_dev
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URLS: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB},postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/postgres
+      AUTH_TYPE: plain
       POOL_MODE: transaction
       MAX_CLIENT_CONN: "1000"
       DEFAULT_POOL_SIZE: "25"
       RESERVE_POOL_SIZE: "5"
+      LISTEN_PORT: "6432"
     expose:
       - "6432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     depends_on:
       db:
         condition: service_healthy
@@ -49,14 +46,22 @@ services:
     container_name: odoo_surpay_app_dev
     restart: unless-stopped
     depends_on:
-      pgbounce:
+      db:
         condition: service_healthy
+      pgbounce:
+        condition: service_started
     environment:
       HOST: pgbounce
       PORT: 6432
       USER: ${POSTGRES_USER}
       PASSWORD: ${POSTGRES_PASSWORD}
       ODOO_RC: /etc/odoo/odoo.conf
+      SURPAY_ENCRYPTION_KEY: ${SURPAY_ENCRYPTION_KEY}
+      ODOO_ADMIN_PASSWD: ${ODOO_ADMIN_PASSWD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    entrypoint: ["/docker-entrypoint-generate-conf.sh"]
     command:
       - odoo
       - -c
@@ -65,7 +70,7 @@ services:
     volumes:
       - odoo_data_dev:/var/lib/odoo
       - ./addons:/mnt/extra-addons
-      - ./config/odoo.dev.conf:/etc/odoo/odoo.conf:ro
+      - ./config/odoo.dev.conf:/etc/odoo/odoo.conf.template:ro
       - ./backups:/backups
     ports:
       - "8069:8069"
