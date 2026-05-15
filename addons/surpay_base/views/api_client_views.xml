@@ -49,6 +49,14 @@
                             invisible="ip_filter_mode == 'all'"
                         />
                     </group>
+                    <group string="Retorno al comercio">
+                        <field name="return_url_behavior"/>
+                        <field
+                            name="return_url"
+                            placeholder="https://comercio.cl/surpay/callback"
+                            invisible="return_url_behavior == 'webhook_only'"
+                        />
+                    </group>
                 </sheet>
             </form>
         </field>

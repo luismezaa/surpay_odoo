@@ -40,6 +40,23 @@ class SurpayApiClient(models.Model):
         help="IPs o CIDRs permitidos (uno por linea o separados por coma). Ejemplo: 192.168.1.10, 10.0.0.0/24",
     )
 
+    # Return URL configuration per merchant.
+    return_url = fields.Char(
+        string="URL de retorno",
+        help="URL a la que Surpay redirigirá al pagador al completarse el pago. Debe comenzar con http:// o https://",
+    )
+    return_url_behavior = fields.Selection(
+        string="Comportamiento de retorno",
+        selection=[
+            ("webhook_only", "Solo webhook (sin redirección)"),
+            ("odoo_final_screen", "Pantalla final en Odoo"),
+            ("auto_redirect", "Redirección automática al comercio"),
+        ],
+        default="webhook_only",
+        required=True,
+        help="Define qué ocurre cuando el pago alcanza un estado terminal.",
+    )
+
     # Defaults used when request payload omits these fields.
     default_local_currency = fields.Char(string="Moneda local", default="ARS", help="Codigo de moneda ISO 4217, p. ej. ARS")
     default_local_country = fields.Char(string="País local", default="AR", help="Codigo de pais ISO 3166-1 alpha-2, p. ej. AR")
@@ -58,6 +75,16 @@ class SurpayApiClient(models.Model):
                 raise ValidationError(_("default_local_country debe tener 2 letras (ISO 3166-1 alpha-2)."))
             if rec.default_qr_from and len(rec.default_qr_from.strip()) != 2:
                 raise ValidationError(_("default_qr_from debe tener 2 letras (ISO 3166-1 alpha-2)."))
+
+    @api.constrains("return_url")
+    def _check_return_url(self):
+        for rec in self:
+            if rec.return_url:
+                url = rec.return_url.strip()
+                if not (url.startswith("http://") or url.startswith("https://")):
+                    raise ValidationError(_("return_url debe comenzar con http:// o https://"))
+                if len(url) > 500:
+                    raise ValidationError(_("return_url no puede superar 500 caracteres."))
 
     def _iter_allowed_ip_rules(self):
         self.ensure_one()

@@ -314,9 +314,13 @@
                                     }
                                     var state = String(result.state).toLowerCase();
                                     updateStateLabel(state);
-                                    if (!result.done) {
-                                        window.setTimeout(pollStatus, 5000);
+                                    if (result.done) {
+                                        if (result.redirect_url) {
+                                            window.location.href = result.redirect_url;
+                                        }
+                                        return;
                                     }
+                                    window.setTimeout(pollStatus, 5000);
                                 })
                                 .catch(function () {
                                     window.setTimeout(pollStatus, 7000);

@@ -56,6 +56,15 @@ class SurpayPaymentIntent(models.Model):
     provider_config_id = fields.Many2one("surpay.provider.config", ondelete="set null", index=True)
     partner_id = fields.Many2one("res.partner", ondelete="set null", index=True)
     notification_url = fields.Char()
+    return_url = fields.Char()
+    return_url_behavior = fields.Selection(
+        selection=[
+            ("webhook_only", "Solo webhook"),
+            ("odoo_final_screen", "Pantalla final Odoo"),
+            ("auto_redirect", "Redirección automática"),
+        ],
+        default="webhook_only",
+    )
     expires_at = fields.Datetime(required=True)
 
     concept = fields.Char()
@@ -127,6 +136,8 @@ class SurpayPaymentIntent(models.Model):
             "qr_from": self.qr_from,
             "expires_at": self.expires_at,
             "payment_url": self.payment_link_url(),
+            "return_url": self.return_url,
+            "return_url_behavior": self.return_url_behavior,
         }
 
     def payment_link_url(self):

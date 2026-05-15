@@ -5,7 +5,7 @@ import hmac
 import json
 import logging
 import time
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlencode
 
 import requests
 
@@ -268,6 +268,8 @@ class SurpayApiController(http.Controller):
                 "expires_at": expires_at,
                 "concept": concept,
                 "qr_from": qr_from,
+                "return_url": client.return_url or "",
+                "return_url_behavior": client.return_url_behavior or "webhook_only",
             }
         )
         transaction = intent.ensure_transaction()
@@ -391,8 +393,31 @@ class SurpayApiController(http.Controller):
             "state": intent.state,
             "expires_at": intent.expires_at,
             "qr_data": qr_data,
+            "return_url_behavior": intent.return_url_behavior or "webhook_only",
         }
         return request.render("l10n_cl_surpay_depay.payment_link_page", values)
+
+    def _build_callback_url(self, intent):
+        """Construye la URL de retorno al comercio con query params y firma HMAC opcional."""
+        status_map = {
+            "paid": "success",
+            "failed": "rejected",
+            "expired": "expired",
+            "cancelled": "rejected",
+        }
+        status = status_map.get(intent.state, intent.state)
+        params = {
+            "status": status,
+            "order_id": intent.order_id or "",
+            "transaction_id": intent.external_order_id or "",
+        }
+        secret = intent.client_id.webhook_secret or ""
+        if secret:
+            msg = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+            params["sig"] = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+        base = intent.return_url.rstrip("?&")
+        sep = "&" if "?" in base else "?"
+        return base + sep + urlencode(params)
 
     @http.route(
         "/pay/<string:payment_token>/status",
@@ -443,6 +468,10 @@ class SurpayApiController(http.Controller):
                 _logger.info("Depay status refresh failed for payment link %s: %s", intent.order_id, exc)
 
         provider_payload = intent.provider_response_payload or {}
+        terminal_states = ("paid", "failed", "expired", "cancelled")
+        redirect_url = None
+        if intent.state in terminal_states and intent.return_url_behavior == "auto_redirect" and intent.return_url:
+            redirect_url = self._build_callback_url(intent)
         return {
             "order_id": intent.order_id,
             "external_order_id": intent.external_order_id,
@@ -450,7 +479,8 @@ class SurpayApiController(http.Controller):
             "provider_status": provider_payload.get("status") or provider_payload.get("order_status"),
             "paid": intent.state == "paid",
             "failed": intent.state in ("failed", "expired", "cancelled"),
-            "done": intent.state in ("paid", "failed", "expired", "cancelled"),
+            "done": intent.state in terminal_states,
+            "redirect_url": redirect_url,
         }
 
     @http.route(
