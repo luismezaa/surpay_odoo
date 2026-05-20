@@ -17,6 +17,10 @@ _logger = logging.getLogger(__name__)
 
 class SurpayApiController(http.Controller):
     ALLOWED_QR_FROM = {"AR", "BR", "PE"}
+    EXTRA_FIELDS_MAX_ITEMS = 6
+    EXTRA_FIELD_TITLE_MAX_LEN = 24
+    EXTRA_FIELD_VALUE_MAX_LEN = 60
+    EXTRA_FIELD_KEY_MAX_LEN = 64
 
     @staticmethod
     def _state_code(state):
@@ -43,10 +47,64 @@ class SurpayApiController(http.Controller):
     def _normalize_country_code(cls, value):
         return (value or "").strip().upper()
 
-    def _resolve_provider_config_for_client(self, client, provider="depay"):
-        if client.provider_config_id and client.provider_config_id.provider == provider:
-            return client.provider_config_id.sudo()
-        return request.env["surpay.provider.config"].sudo().resolve_provider_config(provider=provider)
+    def _supported_providers(self):
+        return {item[0] for item in request.env["surpay.provider.config"].PROVIDERS}
+
+    @staticmethod
+    def _provider_service_name(provider):
+        mapping = {
+            "depay": "surpay.depay.api",
+        }
+        return mapping.get(provider)
+
+    def _resolve_provider_service(self, provider):
+        service_name = self._provider_service_name(provider)
+        _logger.info(f"[PROVIDER DEBUG] Provider recibido: {provider} | Service name: {service_name}")
+        if not service_name:
+            _logger.warning(f"[PROVIDER DEBUG] No se encontró mapping para provider: {provider}")
+            return None
+        if service_name not in request.env:
+            _logger.error(f"[PROVIDER DEBUG] Service {service_name} no está en request.env. Keys disponibles: {list(request.env.keys())}")
+            return None
+        _logger.info(f"[PROVIDER DEBUG] Service {service_name} encontrado en request.env")
+        return request.env[service_name].sudo()
+
+    @staticmethod
+    def _build_provider_callback_url(provider):
+        base_url = request.env["ir.config_parameter"].sudo().get_param("web.base.url", "")
+        return f"{base_url.rstrip('/')}/api/v1/webhooks/providers/{provider}"
+
+    def _refresh_intent_provider_status(self, intent):
+        service = self._resolve_provider_service(intent.provider)
+        if service is None or not intent.provider_payment_id:
+            return
+
+        provider_status = service.get_payment_status(
+            intent.provider_payment_id,
+            provider_config=intent.provider_config_id,
+        )
+        raw_status = service.extract_status(provider_status)
+        mapped_state = service.map_depay_status(
+            raw_status,
+            provider_status.get("message") or provider_status.get("detail") or "",
+        )
+        existing_payload = dict(intent.provider_response_payload or {})
+        merged_payload = dict(existing_payload)
+        merged_payload.update(provider_status or {})
+        if not (merged_payload.get("qr_data") or merged_payload.get("qr_code")):
+            merged_payload["qr_data"] = existing_payload.get("qr_data") or existing_payload.get("qr_code")
+        intent.write(
+            {
+                "state": mapped_state,
+                "provider_response_payload": merged_payload,
+                **service.extract_qr_quote(
+                    merged_payload,
+                    fallback_currency=intent.currency,
+                    fallback_amount=intent.amount,
+                ),
+            }
+        )
+        intent.sync_transaction()
 
     @staticmethod
     def _error(status_code, code, message):
@@ -155,23 +213,62 @@ class SurpayApiController(http.Controller):
             contract_version="v1",
         )
 
+    def _normalize_extra_data_fields(self, extra_data_fields):
+        if not isinstance(extra_data_fields, list):
+            raise ValueError("extra_data_fields must be an array.")
+        if not extra_data_fields:
+            raise ValueError("extra_data_fields must contain at least 1 item.")
+        if len(extra_data_fields) > self.EXTRA_FIELDS_MAX_ITEMS:
+            raise ValueError(f"extra_data_fields supports up to {self.EXTRA_FIELDS_MAX_ITEMS} items.")
+
+        normalized = []
+        seen_keys = set()
+        for idx, item in enumerate(extra_data_fields, start=1):
+            if not isinstance(item, dict):
+                raise ValueError(f"extra_data_fields[{idx}] must be an object.")
+
+            key = str(item.get("key") or "").strip()
+            title = str(item.get("title") or "").strip()
+            value = str(item.get("value") or "").strip()
+
+            if not key or not title or not value:
+                raise ValueError(f"extra_data_fields[{idx}] requires non-empty key, title and value.")
+            if len(key) > self.EXTRA_FIELD_KEY_MAX_LEN:
+                raise ValueError(f"extra_data_fields[{idx}].key max length is {self.EXTRA_FIELD_KEY_MAX_LEN}.")
+            if len(title) > self.EXTRA_FIELD_TITLE_MAX_LEN:
+                raise ValueError(f"extra_data_fields[{idx}].title max length is {self.EXTRA_FIELD_TITLE_MAX_LEN}.")
+            if len(value) > self.EXTRA_FIELD_VALUE_MAX_LEN:
+                raise ValueError(f"extra_data_fields[{idx}].value max length is {self.EXTRA_FIELD_VALUE_MAX_LEN}.")
+            if key in seen_keys:
+                raise ValueError(f"extra_data_fields has duplicate key '{key}'.")
+
+            seen_keys.add(key)
+            normalized.append({"key": key, "title": title, "value": value})
+
+        return normalized
+
     @http.route("/api/v1/payments/intents", type="http", auth="public", methods=["POST"], csrf=False)
     def create_payment_intent(self):
+
         auth_data, auth_error = self._verify_hmac()
         if auth_error:
+            _logger.warning(f"[INTENT DEBUG] Error de autenticación HMAC: {auth_error}")
             return auth_error
 
         client = auth_data["client"]
         idempotency_key = auth_data["idempotency_key"]
         if not idempotency_key:
+            _logger.warning("[INTENT DEBUG] Falta Idempotency-Key header")
             return self._error(400, "missing_idempotency_key", "Idempotency-Key header is required.")
 
         raw_body = auth_data.get("raw_body") or b"{}"
+        _logger.info(f"[INTENT DEBUG] Iniciando create_payment_intent. Payload recibido: {raw_body}")
         try:
             payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
         except Exception:
+            _logger.error(f"[INTENT DEBUG] Payload inválido: {raw_body}")
             return self._error(400, "invalid_payload", "Request body must be valid JSON.")
-        provider = payload.get("provider", "depay")
+        provider = str(payload.get("provider") or "").strip().lower()
         amount = payload.get("amount")
         currency = payload.get("currency") or client.default_local_currency
         external_order_id = payload.get("external_order_id")
@@ -180,21 +277,36 @@ class SurpayApiController(http.Controller):
         local_country = self._normalize_country_code(payload.get("local_country") or client.default_local_country)
         qr_from = self._normalize_country_code(payload.get("qr_from") or client.default_qr_from)
 
-        if provider != "depay":
-            return self._error(400, "unsupported_provider", "Only depay provider is enabled in this module.")
+        _logger.info(f"[INTENT DEBUG] provider={provider}, amount={amount}, currency={currency}, external_order_id={external_order_id}, concept={concept}, expires_in={expires_in}, local_country={local_country}, qr_from={qr_from}")
+
+        if not provider:
+            _logger.warning("[INTENT DEBUG] Falta provider en el payload")
+            return self._error(400, "missing_provider", "provider is required.")
+
+        if provider not in self._supported_providers():
+            _logger.warning(f"[INTENT DEBUG] Provider no soportado: {provider}")
+            return self._error(400, "unsupported_provider", "Provider is not supported.")
+
+        provider_service = self._resolve_provider_service(provider)
+        if provider_service is None:
+            _logger.error(f"[INTENT DEBUG] Provider service no disponible para: {provider}")
+            return self._error(501, "provider_service_not_available", "Provider service is not available.")
 
         if amount is None or not currency:
+            _logger.warning("[INTENT DEBUG] amount o currency faltantes")
             return self._error(400, "invalid_payload", "amount and currency are required.")
 
         if qr_from and qr_from not in self.ALLOWED_QR_FROM:
+            _logger.warning(f"[INTENT DEBUG] qr_from inválido: {qr_from}")
             return self._error(400, "invalid_qr_from", "qr_from must be one of: AR, BR, PE.")
 
-        # Ensure amount is numeric (float)
         try:
             amount = float(amount)
             if amount <= 0:
+                _logger.warning(f"[INTENT DEBUG] amount inválido: {amount}")
                 return self._error(400, "invalid_amount", "amount must be greater than 0.")
         except (ValueError, TypeError):
+            _logger.warning(f"[INTENT DEBUG] amount no numérico: {amount}")
             return self._error(400, "invalid_amount", "amount must be a valid number.")
 
         commission_data = request.env["surpay.commission.rule"].sudo().compute_amounts(
@@ -216,6 +328,7 @@ class SurpayApiController(http.Controller):
             limit=1,
         )
         if existing_idempotent:
+            _logger.info(f"[INTENT DEBUG] Intento idempotente ya existe: {existing_idempotent.id}")
             return request.make_json_response(existing_idempotent.normalized_payload(), status=200)
 
         if external_order_id:
@@ -228,6 +341,7 @@ class SurpayApiController(http.Controller):
                 limit=1,
             )
             if existing_external:
+                _logger.warning(f"[INTENT DEBUG] external_order_id en conflicto: {external_order_id}")
                 return self._error(
                     409,
                     "external_order_conflict",
@@ -237,22 +351,23 @@ class SurpayApiController(http.Controller):
         try:
             expires_at = intent_model.build_expiration(expires_in)
         except Exception:
+            _logger.warning(f"[INTENT DEBUG] expires_in inválido: {expires_in}")
             return self._error(400, "invalid_expiration", "expires_in must be numeric within allowed range.")
 
         order_id = intent_model.generate_order_id()
-        provider_config = self._resolve_provider_config_for_client(client, provider="depay")
+        provider_config = client.resolve_provider_config_for_provider(provider)
         if not provider_config:
-            return self._error(400, "provider_not_configured", "No active Depay provider configuration found.")
+            _logger.warning(f"[INTENT DEBUG] No se encontró configuración para provider: {provider}")
+            return self._error(400, "provider_not_configured", "No provider configuration found for the selected provider.")
 
-        callback_url = request.env["ir.config_parameter"].sudo().get_param(
-            "web.base.url", ""
-        ) + "/api/v1/webhooks/providers/depay"
+        callback_url = self._build_provider_callback_url(provider)
 
+        _logger.info(f"[INTENT DEBUG] Creando intent: order_id={order_id}, provider_config_id={provider_config.id}, callback_url={callback_url}")
         intent = intent_model.create(
             {
                 "order_id": order_id,
                 "external_order_id": external_order_id,
-                "provider": "depay",
+                "provider": provider,
                 "source_channel": "external",
                 "base_amount": amount,
                 "commission_percent": commission_data["commission_percent"],
@@ -274,7 +389,6 @@ class SurpayApiController(http.Controller):
         )
         transaction = intent.ensure_transaction()
 
-        cfg = request.env["ir.config_parameter"].sudo()
         external_reference = external_order_id or order_id
         depay_payload = {
             "amount": amount_to_provider,
@@ -290,20 +404,21 @@ class SurpayApiController(http.Controller):
         if qr_from:
             depay_payload["qr_from"] = qr_from
         pos_id = provider_config.get_credentials().get("pos_id")
-        if not pos_id:
-            pos_id = cfg.get_param("l10n_cl_surpay_depay.pos_id", "")
-        if not pos_id:
-            depay_cfg = request.env["surpay.depay.api"].sudo()._config()
+        if not pos_id and provider == "depay":
+            depay_cfg = provider_service._config()
             pos_id = depay_cfg.get("pos_id", "")
         if pos_id:
             depay_payload["pos_external_reference"] = pos_id
 
         try:
-            depay_response = request.env["surpay.depay.api"].sudo().create_qr(
+            _logger.info(f"[INTENT DEBUG] Llamando a provider_service.create_qr con depay_payload: {depay_payload}")
+            depay_response = provider_service.create_qr(
                 depay_payload,
                 provider_config=provider_config,
             )
+            _logger.info(f"[INTENT DEBUG] Respuesta de provider_service.create_qr: {depay_response}")
         except Exception as exc:
+            _logger.error(f"[INTENT DEBUG] Excepción en provider_service.create_qr: {exc}")
             intent.write(
                 {
                     "state": "failed",
@@ -322,7 +437,7 @@ class SurpayApiController(http.Controller):
                     "message": str(exc),
                 }
             )
-            return self._error(502, "provider_error", "Depay QR creation failed.")
+            return self._error(502, "provider_error", "Provider QR creation failed.")
 
         provider_order_id = depay_response.get("order_id")
         depay_raw_status = (
@@ -331,9 +446,8 @@ class SurpayApiController(http.Controller):
             or depay_response.get("state")
             or "PENDING"
         )
-        depay_service = request.env["surpay.depay.api"].sudo()
-        mapped_state = depay_service.map_depay_status(depay_raw_status)
-        qr_quote = depay_service.extract_qr_quote(
+        mapped_state = provider_service.map_depay_status(depay_raw_status)
+        qr_quote = provider_service.extract_qr_quote(
             depay_response,
             fallback_currency=currency,
             fallback_amount=amount_to_provider,
@@ -437,35 +551,9 @@ class SurpayApiController(http.Controller):
 
         if intent.provider_payment_id and intent.state not in ("paid", "failed", "expired", "cancelled"):
             try:
-                provider_status = request.env["surpay.depay.api"].sudo().get_payment_status(
-                    intent.provider_payment_id,
-                    provider_config=intent.provider_config_id,
-                )
-                depay_service = request.env["surpay.depay.api"].sudo()
-                depay_raw_status = depay_service.extract_status(provider_status)
-                mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
-                    depay_raw_status,
-                    provider_status.get("message") or provider_status.get("detail") or "",
-                )
-                existing_payload = dict(intent.provider_response_payload or {})
-                merged_payload = dict(existing_payload)
-                merged_payload.update(provider_status or {})
-                if not (merged_payload.get("qr_data") or merged_payload.get("qr_code")):
-                    merged_payload["qr_data"] = existing_payload.get("qr_data") or existing_payload.get("qr_code")
-                intent.write(
-                    {
-                        "state": mapped_state,
-                        "provider_response_payload": merged_payload,
-                        **depay_service.extract_qr_quote(
-                            merged_payload,
-                            fallback_currency=intent.currency,
-                            fallback_amount=intent.amount,
-                        ),
-                    }
-                )
-                intent.sync_transaction()
+                self._refresh_intent_provider_status(intent)
             except Exception as exc:
-                _logger.info("Depay status refresh failed for payment link %s: %s", intent.order_id, exc)
+                _logger.info("Provider status refresh failed for payment link %s: %s", intent.order_id, exc)
 
         provider_payload = intent.provider_response_payload or {}
         terminal_states = ("paid", "failed", "expired", "cancelled")
@@ -507,46 +595,30 @@ class SurpayApiController(http.Controller):
 
         if intent.provider_payment_id:
             try:
-                provider_status = request.env["surpay.depay.api"].sudo().get_payment_status(
-                    intent.provider_payment_id,
-                    provider_config=intent.provider_config_id,
-                )
-                depay_service = request.env["surpay.depay.api"].sudo()
-                depay_raw_status = depay_service.extract_status(provider_status)
-                mapped_state = request.env["surpay.depay.api"].sudo().map_depay_status(
-                    depay_raw_status,
-                    provider_status.get("message") or provider_status.get("detail") or "",
-                )
-                existing_payload = dict(intent.provider_response_payload or {})
-                merged_payload = dict(existing_payload)
-                merged_payload.update(provider_status or {})
-                if not (merged_payload.get("qr_data") or merged_payload.get("qr_code")):
-                    merged_payload["qr_data"] = existing_payload.get("qr_data") or existing_payload.get("qr_code")
-                intent.write(
-                    {
-                        "state": mapped_state,
-                        "provider_response_payload": merged_payload,
-                        **depay_service.extract_qr_quote(
-                            merged_payload,
-                            fallback_currency=intent.currency,
-                            fallback_amount=intent.amount,
-                        ),
-                    }
-                )
-                intent.sync_transaction()
+                self._refresh_intent_provider_status(intent)
             except Exception as exc:
-                _logger.info("Depay status refresh failed for %s: %s", intent.order_id, exc)
+                _logger.info("Provider status refresh failed for %s: %s", intent.order_id, exc)
 
         return request.make_json_response(intent.normalized_payload(), status=200)
 
     @http.route(
-        "/api/v1/webhooks/providers/depay",
+        "/api/v1/webhooks/providers/<string:provider>",
         type="http",
         auth="public",
         methods=["POST"],
         csrf=False,
     )
-    def depay_webhook(self):
+    def provider_webhook(self, provider):
+        provider = (provider or "").strip().lower()
+        if not provider:
+            return self._error(400, "missing_provider", "Provider route parameter is required.")
+        if provider not in self._supported_providers():
+            return self._error(400, "unsupported_provider", "Provider is not supported.")
+
+        provider_service = self._resolve_provider_service(provider)
+        if provider_service is None:
+            return self._error(501, "provider_service_not_available", "Provider service is not available.")
+
         raw_body = self._raw_body()
         try:
             payload = json.loads(raw_body.decode("utf-8") or "{}")
@@ -572,8 +644,15 @@ class SurpayApiController(http.Controller):
         if not intent:
             return self._error(404, "not_found", "Payment intent not found for provider order_id.")
 
+        if (intent.provider or "").strip().lower() != provider:
+            return self._error(
+                409,
+                "provider_mismatch_webhook",
+                "Webhook provider does not match payment intent provider.",
+            )
+
         signature_header = request.httprequest.headers.get("signature")
-        signature_valid = request.env["surpay.depay.api"].sudo().validate_callback_signature(
+        signature_valid = provider_service.validate_callback_signature(
             raw_body,
             signature_header,
             provider_config=intent.provider_config_id,
@@ -581,8 +660,7 @@ class SurpayApiController(http.Controller):
         if not signature_valid:
             return self._error(401, "invalid_provider_signature", "Invalid provider callback signature.")
 
-        depay_service = request.env["surpay.depay.api"].sudo()
-        mapped_state = depay_service.map_depay_status(
+        mapped_state = provider_service.map_depay_status(
             payload.get("status") or payload.get("order_status") or payload.get("orderStatus") or payload.get("state"),
             payload.get("message") or payload.get("detail"),
         )
@@ -595,7 +673,7 @@ class SurpayApiController(http.Controller):
             {
                 "state": mapped_state,
                 "provider_response_payload": merged_payload,
-                **depay_service.extract_qr_quote(
+                **provider_service.extract_qr_quote(
                     merged_payload,
                     fallback_currency=intent.currency,
                     fallback_amount=intent.amount,
@@ -624,13 +702,13 @@ class SurpayApiController(http.Controller):
             "transaction": {
                 "order_id": intent.order_id,
                 "external_order_id": intent.external_order_id,
-                "provider": "depay",
+                "provider": provider,
                 "provider_order_id": intent.provider_payment_id,
                 "status": intent.state,
                 "status_code": self._state_code(intent.state),
             },
             "provider": {
-                "name": "depay",
+                "name": provider,
                 "status": payload.get("status"),
                 "message": payload.get("message"),
                 "raw": payload,
@@ -639,3 +717,90 @@ class SurpayApiController(http.Controller):
         self._dispatch_outbound_webhook(transaction, outbound_payload)
 
         return request.make_json_response({"status": "ok"}, status=200)
+
+    @http.route("/api/v1/payments/extra-data", type="http", auth="public", methods=["POST"], csrf=False)
+    def update_payment_extra_data(self):
+        auth_data, auth_error = self._verify_hmac()
+        if auth_error:
+            return auth_error
+
+        client = auth_data["client"]
+        idempotency_key = auth_data["idempotency_key"]
+        if not idempotency_key:
+            return self._error(400, "missing_idempotency_key", "Idempotency-Key header is required.")
+
+        raw_body = auth_data.get("raw_body") or b"{}"
+        try:
+            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+        except Exception:
+            return self._error(400, "invalid_payload", "Request body must be valid JSON.")
+
+        order_id = str(payload.get("order_id") or "").strip()
+        if not order_id:
+            return self._error(400, "missing_order_id", "order_id is required.")
+
+        try:
+            normalized_fields = self._normalize_extra_data_fields(payload.get("extra_data_fields"))
+        except ValueError as exc:
+            return self._error(400, "invalid_extra_data_fields", str(exc))
+
+        tx = (
+            request.env["surpay.payment.transaction"]
+            .sudo()
+            .search([("order_id", "=", order_id), ("client_id", "=", client.id)], limit=1)
+        )
+        if not tx:
+            return self._error(404, "not_found", "Payment transaction not found.")
+
+        provider_raw = dict(tx.provider_raw or {})
+        extra_data = provider_raw.get("extra_data") if isinstance(provider_raw.get("extra_data"), dict) else {}
+        if extra_data.get("last_idempotency_key") == idempotency_key:
+            return request.make_json_response(
+                {
+                    "status": "ok",
+                    "idempotent": True,
+                    "updated": False,
+                    "order_id": tx.order_id,
+                },
+                status=200,
+            )
+
+        extra_data = {
+            "client_code": str(payload.get("client_code") or client.client_id or "").strip(),
+            "provider": str(payload.get("provider") or tx.provider or "").strip(),
+            "source_process": str(payload.get("source_process") or "").strip(),
+            "transaction_id": str(payload.get("transaction_id") or tx.external_order_id or "").strip(),
+            "sent_at": payload.get("sent_at"),
+            "updated_at": fields.Datetime.now().replace(tzinfo=timezone.utc).isoformat(),
+            "last_idempotency_key": idempotency_key,
+            "extra_data_fields": normalized_fields,
+        }
+        provider_raw["extra_data"] = extra_data
+
+        tx.write({"provider_raw": provider_raw})
+        request.env["surpay.payment.event"].sudo().create(
+            {
+                "transaction_id": tx.id,
+                "source": "internal",
+                "event_type": "metadata.extra.updated",
+                "payload": {
+                    "order_id": tx.order_id,
+                    "idempotency_key": idempotency_key,
+                    "extra_data_fields_count": len(normalized_fields),
+                },
+                "signature_valid": True,
+                "processing_status": "ok",
+                "message": "Metadata extra actualizada por API.",
+            }
+        )
+
+        return request.make_json_response(
+            {
+                "status": "ok",
+                "idempotent": False,
+                "updated": True,
+                "order_id": tx.order_id,
+                "extra_data_fields_count": len(normalized_fields),
+            },
+            status=200,
+        )

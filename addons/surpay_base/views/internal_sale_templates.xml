@@ -195,7 +195,7 @@
                                         />
                                         <div class="provider-card-body">
                                             <t t-if="cfg.logo">
-                                                <img class="provider-logo" t-att-src="'/web/image/surpay.provider.config/%s/logo' % cfg.id" t-att-alt="cfg.display_name"/>
+                                                <img class="provider-logo" t-att-src="'/surpay/provider-logo/%s?v=%s' % (cfg.id, (cfg.write_date or ''))" t-att-alt="cfg.display_name"/>
                                             </t>
                                             <t t-else="">
                                                 <div class="provider-logo fallback"><t t-esc="(cfg.provider or '?').upper()[:2]"/></div>

@@ -14,12 +14,11 @@ class SurpayApiClient(models.Model):
     client_secret = fields.Char(string="Secreto cliente", required=True)
     webhook_url = fields.Char(string="URL webhook")
     webhook_secret = fields.Char(string="Secreto webhook")
-    provider_config_id = fields.Many2one(
-        "surpay.provider.config",
-        string="Configuracion proveedor (externa)",
-        ondelete="set null",
-        domain="[('provider', '=', 'depay')]",
-        help="Si se define, esta configuracion se usa para ventas externas de este cliente API.",
+    provider_override_ids = fields.One2many(
+        "surpay.api.client.provider.override",
+        "client_id",
+        string="Overrides por proveedor",
+        help="Configuración por proveedor para este cliente. Si no existe override, se usa la activa global.",
     )
     partner_id = fields.Many2one(
         "res.partner",
@@ -149,8 +148,16 @@ class SurpayApiClient(models.Model):
 
         return False
 
-    @api.constrains("provider_config_id")
-    def _check_provider_config(self):
-        for rec in self:
-            if rec.provider_config_id and rec.provider_config_id.provider != "depay":
-                raise ValidationError(_("Solo se permite configuracion de proveedor Depay para este cliente API."))
+    def resolve_provider_config_for_provider(self, provider):
+        self.ensure_one()
+        provider = (provider or "").strip().lower()
+        if not provider:
+            return self.env["surpay.provider.config"]
+
+        override = self.provider_override_ids.filtered(
+            lambda rec: rec.active and rec.provider == provider and rec.provider_config_id
+        )[:1]
+        if override:
+            return override.provider_config_id.sudo()
+
+        return self.env["surpay.provider.config"].sudo().resolve_provider_config(provider=provider)

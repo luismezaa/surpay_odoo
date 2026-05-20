@@ -9,7 +9,6 @@
                 <field name="client_id"/>
                 <field name="partner_id"/>
                 <field name="ip_filter_mode"/>
-                <field name="provider_config_id"/>
                 <field name="default_local_currency"/>
                 <field name="default_local_country"/>
                 <field name="default_qr_from"/>
@@ -31,7 +30,6 @@
                             <field name="client_id"/>
                             <field name="client_secret" password="True"/>
                             <field name="partner_id"/>
-                            <field name="provider_config_id"/>
                             <field name="webhook_url"/>
                             <field name="webhook_secret" password="True"/>
                         </group>
@@ -56,6 +54,16 @@
                             placeholder="https://comercio.cl/surpay/callback"
                             invisible="return_url_behavior == 'webhook_only'"
                         />
+                    </group>
+                    <group string="Overrides de proveedor por cliente">
+                        <field name="provider_override_ids" nolabel="1">
+                            <list editable="bottom" delete="1" create="1">
+                                <field name="active"/>
+                                <field name="provider"/>
+                                <field name="provider_config_id" domain="[('provider', '=', provider)]"/>
+                                <field name="note"/>
+                            </list>
+                        </field>
                     </group>
                 </sheet>
             </form>

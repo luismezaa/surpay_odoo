@@ -1,0 +1,593 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="integration_docs_page" name="Surpay External API Integration Docs">
+        <t t-call="web.layout">
+            <style>
+                .sp-docs {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 2rem 1rem 3rem;
+                }
+                .sp-docs-grid {
+                    display: grid;
+                    grid-template-columns: 250px 1fr;
+                    gap: 1.5rem;
+                }
+                .sp-docs-nav {
+                    position: sticky;
+                    top: 1rem;
+                    align-self: start;
+                    background: #fff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    padding: 1rem;
+                }
+                .sp-docs-nav a {
+                    display: block;
+                    color: #111827;
+                    text-decoration: none;
+                    font-size: 0.92rem;
+                    padding: 0.35rem 0.5rem;
+                    border-radius: 8px;
+                }
+                .sp-docs-nav a:hover {
+                    background: #f3f4f6;
+                }
+                .sp-docs-main section {
+                    background: #fff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    padding: 1.25rem;
+                    margin-bottom: 1rem;
+                }
+                .sp-docs h1 {
+                    margin-bottom: 0.4rem;
+                }
+                .sp-kicker {
+                    color: #6b7280;
+                    margin-bottom: 1.25rem;
+                }
+                .sp-highlight {
+                    border-left: 4px solid #2563eb;
+                    background: #eff6ff;
+                    border-radius: 8px;
+                    padding: 0.8rem 0.9rem;
+                }
+                .sp-language-tabs {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.5rem;
+                    margin-bottom: 0.8rem;
+                }
+                .sp-language-tabs button {
+                    border: 1px solid #d1d5db;
+                    background: #fff;
+                    color: #111827;
+                    border-radius: 8px;
+                    padding: 0.35rem 0.7rem;
+                    font-size: 0.86rem;
+                }
+                .sp-language-tabs button.is-active {
+                    background: #111827;
+                    color: #fff;
+                    border-color: #111827;
+                }
+                .sp-code {
+                    margin: 0;
+                    background: #0f172a;
+                    color: #e2e8f0;
+                    border-radius: 10px;
+                    padding: 0.85rem;
+                    overflow-x: auto;
+                    font-size: 0.83rem;
+                    line-height: 1.45;
+                }
+                .sp-tab-panel {
+                    display: none;
+                }
+                .sp-tab-panel.is-active {
+                    display: block;
+                }
+                @media (max-width: 992px) {
+                    .sp-docs-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    .sp-docs-nav {
+                        position: static;
+                    }
+                }
+            </style>
+
+            <div class="sp-docs">
+                <div class="sp-docs-grid">
+                    <aside class="sp-docs-nav">
+                        <strong>Contenido</strong>
+                        <a href="#quickstart">Inicio rapido</a>
+                        <a href="#prerequisites">Requisitos previos</a>
+                        <a href="#hmac">Autenticacion HMAC</a>
+                        <a href="#endpoints">Endpoints</a>
+                        <a href="#return-flow">Retorno al comercio</a>
+                        <a href="#resolution">Resolucion provider/config</a>
+                        <a href="#errors">Errores de contrato</a>
+                        <a href="#checklist">Checklist go-live</a>
+                    </aside>
+
+                    <main class="sp-docs-main">
+                        <h1>API Externa Multi-proveedor</h1>
+                        <p class="sp-kicker">Guia publica completa para integrar pagos con autenticacion HMAC, provider obligatorio y flujo de retorno configurable.</p>
+
+                        <section id="quickstart">
+                            <h3>Inicio rapido</h3>
+                            <div class="sp-highlight">
+                                Flujo minimo: generar firma HMAC -&gt; enviar <code>POST /api/v1/payments/intents</code> con <code>provider</code> -&gt; guardar <code>order_id</code> -&gt; consultar estado o procesar webhook.
+                            </div>
+                            <p class="mt-3 mb-2"><strong>Ejemplo base (cURL)</strong></p>
+                            <pre class="sp-code"><code>curl -X POST "https://TU-DOMINIO/api/v1/payments/intents" \
+  -H "Content-Type: application/json" \
+  -H "X-Client-Id: TU_CLIENT_ID" \
+  -H "X-Timestamp: 1716200000" \
+  -H "X-Nonce: 8f6de1b6-1a3b-4f03-b8d4-0f2f5b88e200" \
+  -H "X-Signature: BASE64_HMAC_SHA256" \
+  -H "Idempotency-Key: 1ef8ca0b-7922-49ac-8fcb-19ac7a56f3d6" \
+  -d '{
+    "provider": "depay",
+    "amount": 12000,
+    "currency": "CLP",
+    "external_order_id": "txn_123456",
+    "expires_in": 900,
+    "concept": "Compra API",
+    "qr_from": "AR"
+  }'</code></pre>
+                        </section>
+
+                        <section id="prerequisites">
+                            <h3>Requisitos previos</h3>
+                            <ol>
+                                <li>Solicitar alta del cliente API para obtener <code>client_id</code> y <code>client_secret</code>.</li>
+                                <li>Definir IPs de salida para permitirlas en la lista autorizada del cliente.</li>
+                                <li>Definir estrategia de retorno al comercio:
+                                    <ul>
+                                        <t t-foreach="return_behaviors" t-as="behavior_item">
+                                            <li><code t-out="behavior_item[0]"/>: <span t-out="behavior_item[1]"/></li>
+                                        </t>
+                                    </ul>
+                                </li>
+                                <li>Definir que proveedor se enviara por transaccion en el campo <code>provider</code>.</li>
+                                <li>Generar <code>Idempotency-Key</code> unico por request de create intent.</li>
+                            </ol>
+                        </section>
+
+                        <section id="hmac">
+                            <h3>Autenticacion HMAC</h3>
+                            <p>Headers requeridos: <code>X-Client-Id</code>, <code>X-Timestamp</code>, <code>X-Nonce</code>, <code>X-Signature</code>. Para create intent tambien se exige <code>Idempotency-Key</code>.</p>
+                            <p><strong>Canonical string:</strong></p>
+                            <pre class="sp-code"><code>METHOD\nPATH\nQUERY_NORMALIZED\nBODY_SHA256_HEX\nTIMESTAMP\nNONCE</code></pre>
+                            <p class="mt-2 mb-1"><strong>Tabs de implementacion</strong></p>
+
+                            <div class="sp-language-tabs" data-tab-group="hmac">
+                                <button class="is-active" data-tab-target="js">Node.js</button>
+                                <button data-tab-target="python">Python</button>
+                                <button data-tab-target="php">PHP</button>
+                                <button data-tab-target="java">Java</button>
+                                <button data-tab-target="csharp">C#</button>
+                                <button data-tab-target="go">Go</button>
+                            </div>
+
+                            <div class="sp-tab-panel is-active" data-tab-panel="hmac" data-tab-id="js">
+                                <pre class="sp-code"><code>const crypto = require("crypto");
+
+function signRequest({ method, path, query, rawBody, timestamp, nonce, clientSecret }) {
+  const normalizedQuery = new URLSearchParams(query || "");
+  const sortedQuery = [...normalizedQuery.entries()]
+    .sort((a, b) =&gt; (a[0] + a[1]).localeCompare(b[0] + b[1]))
+    .map(([k, v]) =&gt; `${k}=${v}`)
+    .join("&amp;");
+
+  const bodyHash = crypto.createHash("sha256").update(rawBody || "", "utf8").digest("hex");
+  const canonical = [method.toUpperCase(), path, sortedQuery, bodyHash, timestamp, nonce].join("\n");
+
+  return crypto.createHmac("sha256", clientSecret).update(canonical, "utf8").digest("base64");
+}</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="hmac" data-tab-id="python">
+                                <pre class="sp-code"><code>import base64
+import hashlib
+import hmac
+from urllib.parse import parse_qsl
+
+def sign_request(method, path, query_string, raw_body, timestamp, nonce, client_secret):
+    pairs = parse_qsl(query_string or "", keep_blank_values=True)
+    pairs.sort(key=lambda x: (x[0], x[1]))
+    normalized_query = "&amp;".join([f"{k}={v}" for k, v in pairs])
+
+    body_hash = hashlib.sha256((raw_body or "").encode("utf-8")).hexdigest()
+    canonical = "\n".join([method.upper(), path, normalized_query, body_hash, str(timestamp), nonce])
+
+    digest = hmac.new(client_secret.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).digest()
+    return base64.b64encode(digest).decode("utf-8")</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="hmac" data-tab-id="php">
+                                <pre class="sp-code"><code>&lt;?php
+function sign_request($method, $path, $queryString, $rawBody, $timestamp, $nonce, $clientSecret) {
+    parse_str($queryString ?: "", $query);
+    ksort($query);
+    $normalizedQuery = http_build_query($query, "", "&amp;", PHP_QUERY_RFC3986);
+
+    $bodyHash = hash("sha256", $rawBody ?: "");
+    $canonical = strtoupper($method) . "\n" . $path . "\n" . $normalizedQuery . "\n" . $bodyHash . "\n" . $timestamp . "\n" . $nonce;
+
+    $hmac = hash_hmac("sha256", $canonical, $clientSecret, true);
+    return base64_encode($hmac);
+}
+?&gt;</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="hmac" data-tab-id="java">
+                                <pre class="sp-code"><code>import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+public static String signRequest(String canonical, String clientSecret) throws Exception {
+    Mac hmac = Mac.getInstance("HmacSHA256");
+    hmac.init(new SecretKeySpec(clientSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+    byte[] digest = hmac.doFinal(canonical.getBytes(StandardCharsets.UTF_8));
+    return Base64.getEncoder().encodeToString(digest);
+}</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="hmac" data-tab-id="csharp">
+                                <pre class="sp-code"><code>using System.Security.Cryptography;
+using System.Text;
+
+public static string SignRequest(string canonical, string clientSecret)
+{
+    using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(clientSecret));
+    var digest = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
+    return Convert.ToBase64String(digest);
+}</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="hmac" data-tab-id="go">
+                                <pre class="sp-code"><code>import (
+    "crypto/hmac"
+    "crypto/sha256"
+    "encoding/base64"
+)
+
+func SignRequest(canonical string, clientSecret string) string {
+    mac := hmac.New(sha256.New, []byte(clientSecret))
+    mac.Write([]byte(canonical))
+    return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}</code></pre>
+                            </div>
+                        </section>
+
+                        <section id="endpoints">
+                            <h3>Endpoints</h3>
+                            <ul>
+                                <li><code>POST /api/v1/payments/intents</code> - Crear intent de pago.</li>
+                                <li><code>GET /api/v1/payments/intents/&lt;order_id&gt;</code> - Consultar estado del intent.</li>
+                                <li><code>POST /api/v1/payments/extra-data</code> - Adjuntar metadata complementaria.</li>
+                                <li><code>POST /api/v1/webhooks/providers/&lt;provider&gt;</code> - Webhook del proveedor.</li>
+                            </ul>
+
+                            <p class="mb-1"><strong>Request minimo create intent</strong></p>
+                            <pre class="sp-code"><code>{
+  "provider": "depay",
+  "amount": 12000,
+  "currency": "CLP",
+  "external_order_id": "txn_123456",
+  "expires_in": 900,
+  "concept": "Compra API",
+  "qr_from": "AR"
+}</code></pre>
+
+                                                        <p class="mt-3 mb-1"><strong>Ejemplos de implementacion (create intent)</strong></p>
+                                                        <div class="sp-language-tabs" data-tab-group="create-intent">
+                                                                <button class="is-active" data-tab-target="js">Node.js</button>
+                                                                <button data-tab-target="python">Python</button>
+                                                                <button data-tab-target="php">PHP</button>
+                                                                <button data-tab-target="java">Java</button>
+                                                                <button data-tab-target="csharp">C#</button>
+                                                                <button data-tab-target="go">Go</button>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel is-active" data-tab-panel="create-intent" data-tab-id="js">
+                                                                <pre class="sp-code"><code>const axios = require("axios");
+const crypto = require("crypto");
+
+async function createIntent() {
+    const method = "POST";
+    const path = "/api/v1/payments/intents";
+    const body = JSON.stringify({
+        provider: "depay",
+        amount: 12000,
+        currency: "CLP",
+        external_order_id: "txn_123456",
+        expires_in: 900,
+        concept: "Compra API",
+        qr_from: "AR"
+    });
+
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const nonce = crypto.randomUUID();
+    const idem = crypto.randomUUID();
+    const signature = signRequest({ method, path, query: "", rawBody: body, timestamp: ts, nonce, clientSecret: process.env.CLIENT_SECRET });
+
+    const res = await axios.post(`${process.env.BASE_URL}${path}`, body, {
+        headers: {
+            "Content-Type": "application/json",
+            "X-Client-Id": process.env.CLIENT_ID,
+            "X-Timestamp": ts,
+            "X-Nonce": nonce,
+            "X-Signature": signature,
+            "Idempotency-Key": idem
+        }
+    });
+    return res.data;
+}</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="python">
+                                                                <pre class="sp-code"><code>import json
+import requests
+import time
+import uuid
+
+def create_intent(base_url, client_id, client_secret):
+        path = "/api/v1/payments/intents"
+        payload = {
+                "provider": "depay",
+                "amount": 12000,
+                "currency": "CLP",
+                "external_order_id": "txn_123456",
+                "expires_in": 900,
+                "concept": "Compra API",
+                "qr_from": "AR",
+        }
+        raw_body = json.dumps(payload, separators=(",", ":"))
+        ts = str(int(time.time()))
+        nonce = str(uuid.uuid4())
+        idem = str(uuid.uuid4())
+        signature = sign_request("POST", path, "", raw_body, ts, nonce, client_secret)
+
+        headers = {
+                "Content-Type": "application/json",
+                "X-Client-Id": client_id,
+                "X-Timestamp": ts,
+                "X-Nonce": nonce,
+                "X-Signature": signature,
+                "Idempotency-Key": idem,
+        }
+        response = requests.post(f"{base_url}{path}", data=raw_body, headers=headers, timeout=20)
+        response.raise_for_status()
+        return response.json()</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="php">
+                                                                <pre class="sp-code"><code>&lt;?php
+$path = "/api/v1/payments/intents";
+$payload = json_encode([
+    "provider" =&gt; "depay",
+    "amount" =&gt; 12000,
+    "currency" =&gt; "CLP",
+    "external_order_id" =&gt; "txn_123456",
+    "expires_in" =&gt; 900,
+    "concept" =&gt; "Compra API",
+    "qr_from" =&gt; "AR"
+]);
+
+$timestamp = strval(time());
+$nonce = uuid_create(UUID_TYPE_RANDOM);
+$idempotency = uuid_create(UUID_TYPE_RANDOM);
+$signature = sign_request("POST", $path, "", $payload, $timestamp, $nonce, $clientSecret);
+
+$headers = [
+    "Content-Type: application/json",
+    "X-Client-Id: $clientId",
+    "X-Timestamp: $timestamp",
+    "X-Nonce: $nonce",
+    "X-Signature: $signature",
+    "Idempotency-Key: $idempotency"
+];
+
+$ch = curl_init($baseUrl . $path);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = curl_exec($ch);
+curl_close($ch);
+?&gt;</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="java">
+                                                                <pre class="sp-code"><code>HttpClient client = HttpClient.newHttpClient();
+String path = "/api/v1/payments/intents";
+String body = "{\"provider\":\"depay\",\"amount\":12000,\"currency\":\"CLP\",\"external_order_id\":\"txn_123456\",\"expires_in\":900,\"concept\":\"Compra API\",\"qr_from\":\"AR\"}";
+
+String ts = String.valueOf(Instant.now().getEpochSecond());
+String nonce = UUID.randomUUID().toString();
+String idem = UUID.randomUUID().toString();
+String canonical = String.join("\\n", "POST", path, "", sha256Hex(body), ts, nonce);
+String signature = signRequest(canonical, clientSecret);
+
+HttpRequest req = HttpRequest.newBuilder()
+        .uri(URI.create(baseUrl + path))
+        .header("Content-Type", "application/json")
+        .header("X-Client-Id", clientId)
+        .header("X-Timestamp", ts)
+        .header("X-Nonce", nonce)
+        .header("X-Signature", signature)
+        .header("Idempotency-Key", idem)
+        .POST(HttpRequest.BodyPublishers.ofString(body))
+        .build();
+
+HttpResponse&lt;String&gt; res = client.send(req, HttpResponse.BodyHandlers.ofString());</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="csharp">
+                                                                <pre class="sp-code"><code>var path = "/api/v1/payments/intents";
+var payload = "{\"provider\":\"depay\",\"amount\":12000,\"currency\":\"CLP\",\"external_order_id\":\"txn_123456\",\"expires_in\":900,\"concept\":\"Compra API\",\"qr_from\":\"AR\"}";
+var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+var nonce = Guid.NewGuid().ToString();
+var idem = Guid.NewGuid().ToString();
+var canonical = string.Join("\n", "POST", path, "", Sha256Hex(payload), ts, nonce);
+var signature = SignRequest(canonical, clientSecret);
+
+using var http = new HttpClient();
+using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + path);
+req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+req.Headers.Add("X-Client-Id", clientId);
+req.Headers.Add("X-Timestamp", ts);
+req.Headers.Add("X-Nonce", nonce);
+req.Headers.Add("X-Signature", signature);
+req.Headers.Add("Idempotency-Key", idem);
+var res = await http.SendAsync(req);</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="go">
+                                                                <pre class="sp-code"><code>path := "/api/v1/payments/intents"
+body := `{"provider":"depay","amount":12000,"currency":"CLP","external_order_id":"txn_123456","expires_in":900,"concept":"Compra API","qr_from":"AR"}`
+ts := strconv.FormatInt(time.Now().Unix(), 10)
+nonce := uuid.New().String()
+idem := uuid.New().String()
+canonical := strings.Join([]string{"POST", path, "", sha256Hex(body), ts, nonce}, "\n")
+signature := SignRequest(canonical, clientSecret)
+
+req, _ := http.NewRequest("POST", baseURL+path, strings.NewReader(body))
+req.Header.Set("Content-Type", "application/json")
+req.Header.Set("X-Client-Id", clientID)
+req.Header.Set("X-Timestamp", ts)
+req.Header.Set("X-Nonce", nonce)
+req.Header.Set("X-Signature", signature)
+req.Header.Set("Idempotency-Key", idem)
+res, err := http.DefaultClient.Do(req)</code></pre>
+                                                        </div>
+
+                            <p class="mt-3 mb-1"><strong>Proveedor soportado</strong></p>
+                            <ul>
+                                <t t-foreach="providers" t-as="provider_item">
+                                    <li><code t-out="provider_item[0]"/> - <span t-out="provider_item[1]"/></li>
+                                </t>
+                            </ul>
+                        </section>
+
+                        <section id="return-flow">
+                            <h3>Retorno al comercio</h3>
+                            <p>El cliente API define como cerrar el flujo en el comercio mediante <code>return_url</code> y <code>return_url_behavior</code>.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>return_url_behavior</th>
+                                            <th>Comportamiento</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="return_behaviors" t-as="behavior_item">
+                                            <tr>
+                                                <td><code t-out="behavior_item[0]"/></td>
+                                                <td t-out="behavior_item[1]"/>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p>Cuando uses callback firmado, firma recomendada: HMAC-SHA256 sobre la cadena ordenada <code>status=...&amp;order_id=...&amp;transaction_id=...</code>.</p>
+                        </section>
+
+                        <section id="resolution">
+                            <h3>Resolucion provider/config</h3>
+                            <ol>
+                                <li>Override cliente/proveedor en <code>surpay.api.client.provider.override</code>.</li>
+                                <li>Configuracion activa global del proveedor.</li>
+                                <li>Error <code>provider_not_configured</code> si no existe ninguna.</li>
+                            </ol>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Escenario</th>
+                                            <th>Resultado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Existe override cliente/proveedor</td>
+                                            <td>Se usa override, incluso si la configuracion referenciada esta inactiva.</td>
+                                        </tr>
+                                        <tr>
+                                            <td>No existe override, pero hay configuracion global activa</td>
+                                            <td>Se usa la configuracion global activa del proveedor.</td>
+                                        </tr>
+                                        <tr>
+                                            <td>No existe override ni configuracion global activa</td>
+                                            <td>Error <code>provider_not_configured</code>.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section id="errors">
+                            <h3>Errores de contrato</h3>
+                            <ul>
+                                <li><code>missing_provider</code>: falta <code>provider</code> en payload.</li>
+                                <li><code>unsupported_provider</code>: provider fuera de catalogo soportado.</li>
+                                <li><code>provider_not_configured</code>: sin override ni configuracion global activa.</li>
+                                <li><code>provider_service_not_available</code>: provider soportado sin servicio implementado.</li>
+                                <li><code>provider_mismatch_webhook</code>: provider de ruta diferente al intent asociado.</li>
+                                <li><code>missing_idempotency_key</code>: falta header en create intent.</li>
+                            </ul>
+                        </section>
+
+                        <section id="checklist">
+                            <h3>Checklist go-live</h3>
+                            <ul>
+                                <li><code>client_id</code> y <code>client_secret</code> activos.</li>
+                                <li>IPs de origen autorizadas configuradas.</li>
+                                <li>Implementacion HMAC con canonical string validada.</li>
+                                <li>Generacion de <code>X-Nonce</code> unico por request y ventana de tiempo controlada.</li>
+                                <li><code>Idempotency-Key</code> unico por create intent.</li>
+                                <li>Seleccion explicita de <code>provider</code> por transaccion.</li>
+                                <li>Validacion de <code>qr_from</code> en: <span t-out="', '.join(qr_from_values)"/>.</li>
+                                <li>Definicion final de <code>return_url_behavior</code> con el comercio.</li>
+                                <li>Pruebas de webhook con provider correcto e incorrecto.</li>
+                            </ul>
+                        </section>
+                    </main>
+                </div>
+            </div>
+
+            <script type="text/javascript">
+                document.addEventListener("DOMContentLoaded", function () {
+                    const tabGroups = document.querySelectorAll("[data-tab-group]");
+                    tabGroups.forEach((group) =&gt; {
+                        const groupName = group.getAttribute("data-tab-group");
+                        const buttons = group.querySelectorAll("button[data-tab-target]");
+                        const panels = document.querySelectorAll('[data-tab-panel="' + groupName + '"]');
+
+                        const activate = (target) =&gt; {
+                            buttons.forEach((btn) =&gt; {
+                                btn.classList.toggle("is-active", btn.getAttribute("data-tab-target") === target);
+                            });
+                            panels.forEach((panel) =&gt; {
+                                panel.classList.toggle("is-active", panel.getAttribute("data-tab-id") === target);
+                            });
+                        };
+
+                        buttons.forEach((btn) =&gt; {
+                            btn.addEventListener("click", function () {
+                                activate(btn.getAttribute("data-tab-target"));
+                            });
+                        });
+                    });
+                });
+            </script>
+        </t>
+    </template>
+</odoo>

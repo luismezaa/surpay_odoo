@@ -25,7 +25,7 @@ class SurpayPaymentIntent(models.Model):
     )
 
     provider = fields.Selection(
-        selection=[("depay", "Depay")],
+        selection=lambda self: self.env["surpay.provider.config"].PROVIDERS,
         default="depay",
         required=True,
         index=True,
@@ -214,3 +214,11 @@ class SurpayPaymentIntent(models.Model):
             if rec.concept:
                 vals["concept"] = rec.concept
             tx.write(vals)
+
+    @api.constrains("provider", "provider_config_id")
+    def _check_provider_config_consistency(self):
+        for rec in self:
+            if rec.provider and rec.provider_config_id and rec.provider != rec.provider_config_id.provider:
+                raise ValidationError(
+                    _("El proveedor del intento debe coincidir con el proveedor de la configuración asignada.")
+                )

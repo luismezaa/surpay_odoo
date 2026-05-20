@@ -100,6 +100,12 @@
         </field>
     </record>
 
+    <record id="surpay_api_docs_url_action" model="ir.actions.act_url">
+        <field name="name">Documentacion API</field>
+        <field name="url">/surpay/docs/external-api</field>
+        <field name="target">new</field>
+    </record>
+
     <menuitem
         id="surpay_menu_root"
         name="Surpay"
@@ -111,7 +117,7 @@
         id="surpay_configuration_menu"
         name="Configuracion"
         parent="surpay_menu_root"
-        groups="surpay_base.group_surpay_manager,base.group_system"
+        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_manager,base.group_system"
         sequence="20"
     />
 
@@ -123,5 +129,14 @@
         action="surpay_provider_config_action"
         groups="surpay_base.group_surpay_manager,base.group_system"
         sequence="1"
+    />
+
+    <menuitem
+        id="surpay_api_docs_menu"
+        name="Documentacion API"
+        parent="surpay_configuration_menu"
+        action="surpay_api_docs_url_action"
+        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_manager,base.group_system"
+        sequence="90"
     />
 </odoo>

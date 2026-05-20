@@ -1,5 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_surpay_api_client_system,surpay.api.client system,model_surpay_api_client,base.group_system,1,1,1,1
+access_surpay_api_client_provider_override_system,surpay.api.client.provider.override system,model_surpay_api_client_provider_override,base.group_system,1,1,1,1
+access_surpay_api_client_provider_override_user,surpay.api.client.provider.override user,model_surpay_api_client_provider_override,surpay_base.group_surpay_manager,1,1,1,0
 access_surpay_provider_config_system,surpay.provider.config system,model_surpay_provider_config,base.group_system,1,1,1,1
 access_surpay_provider_config_user,surpay.provider.config user,model_surpay_provider_config,surpay_base.group_surpay_manager,1,1,1,0
 access_surpay_commission_rule_system,surpay.commission.rule system,model_surpay_commission_rule,base.group_system,1,1,1,1

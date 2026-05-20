@@ -2,6 +2,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 import base64
 import io
+import json
 import pytz
 from collections import OrderedDict
 
@@ -99,6 +100,75 @@ class SurpayCashClosureReportWizard(models.TransientModel):
         localized = fields.Datetime.context_timestamp(self, value)
         return localized.strftime("%d-%m-%Y %H:%M")
 
+    @staticmethod
+    def _safe_text(value):
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @staticmethod
+    def _truncate_text(text, max_len=24):
+        value = SurpayCashClosureReportWizard._safe_text(text)
+        if len(value) <= max_len:
+            return value
+        return f"{value[:max_len - 3]}..."
+
+    def _extract_extra_data_fields(self, provider_raw):
+        payload = provider_raw
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except Exception:
+                return []
+
+        if not isinstance(payload, dict):
+            return []
+
+        extra_data = payload.get("extra_data")
+        if not isinstance(extra_data, dict):
+            return []
+
+        fields_list = extra_data.get("extra_data_fields")
+        if not isinstance(fields_list, list):
+            return []
+
+        normalized = []
+        for item in fields_list:
+            if not isinstance(item, dict):
+                continue
+            title = self._safe_text(item.get("title"))
+            value = self._safe_text(item.get("value"))
+            if not title or not value:
+                continue
+            normalized.append({"title": title, "value": value})
+
+        return normalized
+
+    def _format_extra_data_pdf(self, provider_raw):
+        fields_list = self._extract_extra_data_fields(provider_raw)
+        if not fields_list:
+            return ""
+
+        if len(fields_list) == 1:
+            item = fields_list[0]
+            return f"{item['title']}: {item['value']}"
+
+        visible_items = fields_list[:2]
+        parts = [
+            f"{item['title']}: {self._truncate_text(item['value'], 20)}"
+            for item in visible_items
+        ]
+        hidden = len(fields_list) - len(visible_items)
+        if hidden > 0:
+            parts.append(f"+{hidden} mas")
+        return " | ".join(parts)
+
+    def _format_extra_data_excel(self, provider_raw):
+        fields_list = self._extract_extra_data_fields(provider_raw)
+        if not fields_list:
+            return ""
+        return " | ".join([f"{item['title']}: {item['value']}" for item in fields_list])
+
     def _build_sections_sql(self, users):
         """
         Construye todas las secciones del reporte en una sola query SQL
@@ -136,7 +206,8 @@ class SurpayCashClosureReportWizard(models.TransientModel):
                 COALESCE(st.amount, 0)                       AS amount,
                 COALESCE(st.base_amount, 0)                  AS base_amount,
                 COALESCE(st.commission_amount, 0)            AS commission_amount,
-                st.concept
+                st.concept,
+                st.provider_raw
             FROM surpay_cash_closure sc
             LEFT JOIN surpay_payment_transaction st
                 ON st.cash_closure_id = sc.id
@@ -178,6 +249,7 @@ class SurpayCashClosureReportWizard(models.TransientModel):
                     "base_amount": r["base_amount"],
                     "commission_amount": r["commission_amount"],
                     "concept": r["concept"] or "",
+                    "provider_raw": r["provider_raw"],
                 })
 
         # Construir secciones manteniendo el orden de `users`
@@ -209,6 +281,8 @@ class SurpayCashClosureReportWizard(models.TransientModel):
                     "amount_display": self._format_amount(t["amount"]),
                     "state_label": paid_label,
                     "concept": t["concept"],
+                    "extra_data_pdf": self._format_extra_data_pdf(t["provider_raw"]),
+                    "extra_data_excel": self._format_extra_data_excel(t["provider_raw"]),
                 }
                 for t in all_txs
             ]
@@ -296,6 +370,7 @@ class SurpayCashClosureReportWizard(models.TransientModel):
             ws.column_dimensions["C"].width = 16
             ws.column_dimensions["D"].width = 14
             ws.column_dimensions["E"].width = 30
+            ws.column_dimensions["F"].width = 48
 
             row = 1
             # ---- Encabezado empresa ----
@@ -352,8 +427,8 @@ class SurpayCashClosureReportWizard(models.TransientModel):
             row += 1
 
             # ---- Detalle de transacciones ----
-            headers = ["Orden", "Fecha / Hora", "Monto", "Estado", "Concepto"]
-            cols = ["A", "B", "C", "D", "E"]
+            headers = ["Orden", "Fecha / Hora", "Monto", "Estado", "Concepto", "Data extra"]
+            cols = ["A", "B", "C", "D", "E", "F"]
             for col, h in zip(cols, headers):
                 cell = ws[f"{col}{row}"]
                 cell.value = h
@@ -369,6 +444,7 @@ class SurpayCashClosureReportWizard(models.TransientModel):
                     line["amount_display"],
                     line["state_label"],
                     line["concept"],
+                    line["extra_data_excel"],
                 ]
                 for col, val in zip(cols, values):
                     cell = ws[f"{col}{row}"]

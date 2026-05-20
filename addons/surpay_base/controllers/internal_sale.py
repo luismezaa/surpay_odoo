@@ -1,6 +1,7 @@
 import uuid
 import json
 import logging
+import base64
 
 from odoo import http
 from odoo.http import request
@@ -16,6 +17,18 @@ class SurpayInternalSaleController(http.Controller):
         ("BR", "Brasil", "🇧🇷"),
         ("PE", "Peru", "🇵🇪"),
     )
+
+    @staticmethod
+    def _detect_image_content_type(image_bytes):
+        if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if image_bytes.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if image_bytes.startswith(b"GIF87a") or image_bytes.startswith(b"GIF89a"):
+            return "image/gif"
+        if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+            return "image/webp"
+        return "application/octet-stream"
 
     def _odoo_return_url(self):
         """Build a stable backend URL to avoid returning to the last act_url state."""
@@ -79,7 +92,7 @@ class SurpayInternalSaleController(http.Controller):
         expires_at = intent_model.build_expiration(900)
 
         callback_url = request.env["ir.config_parameter"].sudo().get_param("web.base.url", "")
-        callback_url = f"{callback_url.rstrip('/')}/api/v1/webhooks/providers/depay"
+        callback_url = f"{callback_url.rstrip('/')}/api/v1/webhooks/providers/{provider_config.provider}"
 
         intent = intent_model.create(
             {
@@ -197,6 +210,27 @@ class SurpayInternalSaleController(http.Controller):
             "odoo_return_url": self._odoo_return_url(),
         }
         return request.render("surpay_base.new_sale_page", values)
+
+    @http.route("/surpay/provider-logo/<int:config_id>", type="http", auth="user", methods=["GET"], csrf=False)
+    def provider_logo(self, config_id, **kwargs):
+        config = request.env["surpay.provider.config"].sudo().search([
+            ("id", "=", config_id),
+            ("state", "=", "active"),
+        ], limit=1)
+        if not config or not config.logo:
+            return request.not_found()
+
+        try:
+            image_bytes = base64.b64decode(config.logo)
+        except Exception:
+            _logger.warning("No se pudo decodificar logo para provider config id=%s", config_id)
+            return request.not_found()
+
+        headers = [
+            ("Content-Type", self._detect_image_content_type(image_bytes)),
+            ("Cache-Control", "public, max-age=3600"),
+        ]
+        return request.make_response(image_bytes, headers=headers)
 
     @http.route("/surpay/new-sale/start", type="json", auth="user", methods=["POST"], csrf=False)
     def new_sale_start(self):
