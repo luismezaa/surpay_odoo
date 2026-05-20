@@ -5,7 +5,7 @@ Este documento describe el contrato vigente para la API externa de pagos en Surp
 ## Resumen
 
 - `provider` es obligatorio en cada `POST /api/v1/payments/intents`.
-- No existe fallback implicito a `depay`.
+- No existe fallback implicito a `surpay_fronterizo`.
 - La configuracion efectiva se resuelve por esta regla:
   1. Override del cliente para ese proveedor.
   2. Configuracion activa global para ese proveedor.
@@ -41,7 +41,7 @@ El override puede apuntar a una configuracion inactiva cuando se requiere prueba
 
 ```json
 {
-  "provider": "depay",
+  "provider": "surpay_fronterizo",
   "amount": 12000,
   "currency": "CLP",
   "external_order_id": "txn_1234567890",

@@ -30,6 +30,10 @@ class SurpayPaymentIntent(models.Model):
         required=True,
         index=True,
     )
+    requested_provider = fields.Char(
+        string="Provider solicitado",
+        help="Valor de provider recibido en el request externo. Se usa para responder respetando el contrato del integrador.",
+    )
 
     order_id = fields.Char(required=True, index=True)
     external_order_id = fields.Char(index=True)
@@ -122,7 +126,7 @@ class SurpayPaymentIntent(models.Model):
         return {
             "order_id": self.order_id,
             "external_order_id": self.external_order_id,
-            "provider": self.provider,
+            "provider": self.requested_provider or self.provider,
             "provider_payment_id": self.provider_payment_id,
             "state": self.state,
             "base_amount": self.base_amount,

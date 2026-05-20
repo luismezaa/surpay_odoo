@@ -107,7 +107,6 @@
                         <a href="#hmac">Autenticacion HMAC</a>
                         <a href="#endpoints">Endpoints</a>
                         <a href="#return-flow">Retorno al comercio</a>
-                        <a href="#resolution">Resolucion provider/config</a>
                         <a href="#errors">Errores de contrato</a>
                         <a href="#checklist">Checklist go-live</a>
                     </aside>
@@ -130,7 +129,7 @@
   -H "X-Signature: BASE64_HMAC_SHA256" \
   -H "Idempotency-Key: 1ef8ca0b-7922-49ac-8fcb-19ac7a56f3d6" \
   -d '{
-    "provider": "depay",
+    "provider": "surpay_fronterizo",
     "amount": 12000,
     "currency": "CLP",
     "external_order_id": "txn_123456",
@@ -209,8 +208,7 @@ def sign_request(method, path, query_string, raw_body, timestamp, nonce, client_
                             </div>
 
                             <div class="sp-tab-panel" data-tab-panel="hmac" data-tab-id="php">
-                                <pre class="sp-code"><code>&lt;?php
-function sign_request($method, $path, $queryString, $rawBody, $timestamp, $nonce, $clientSecret) {
+                                <pre class="sp-code"><code>function sign_request($method, $path, $queryString, $rawBody, $timestamp, $nonce, $clientSecret) {
     parse_str($queryString ?: "", $query);
     ksort($query);
     $normalizedQuery = http_build_query($query, "", "&amp;", PHP_QUERY_RFC3986);
@@ -220,8 +218,7 @@ function sign_request($method, $path, $queryString, $rawBody, $timestamp, $nonce
 
     $hmac = hash_hmac("sha256", $canonical, $clientSecret, true);
     return base64_encode($hmac);
-}
-?&gt;</code></pre>
+}</code></pre>
                             </div>
 
                             <div class="sp-tab-panel" data-tab-panel="hmac" data-tab-id="java">
@@ -276,7 +273,7 @@ func SignRequest(canonical string, clientSecret string) string {
 
                             <p class="mb-1"><strong>Request minimo create intent</strong></p>
                             <pre class="sp-code"><code>{
-  "provider": "depay",
+    "provider": "surpay_fronterizo",
   "amount": 12000,
   "currency": "CLP",
   "external_order_id": "txn_123456",
@@ -303,7 +300,7 @@ async function createIntent() {
     const method = "POST";
     const path = "/api/v1/payments/intents";
     const body = JSON.stringify({
-        provider: "depay",
+        provider: "surpay_fronterizo",
         amount: 12000,
         currency: "CLP",
         external_order_id: "txn_123456",
@@ -340,7 +337,7 @@ import uuid
 def create_intent(base_url, client_id, client_secret):
         path = "/api/v1/payments/intents"
         payload = {
-                "provider": "depay",
+                "provider": "surpay_fronterizo",
                 "amount": 12000,
                 "currency": "CLP",
                 "external_order_id": "txn_123456",
@@ -368,10 +365,32 @@ def create_intent(base_url, client_id, client_secret):
                                                         </div>
 
                                                         <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="php">
-                                                                <pre class="sp-code"><code>&lt;?php
+                                                            <pre class="sp-code"><code>function generate_uuid_v4() {
+    $data = random_bytes(16);
+    $data[6] = chr((ord($data[6]) &amp; 0x0f) | 0x40);
+    $data[8] = chr((ord($data[8]) &amp; 0x3f) | 0x80);
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+}
+
+function sign_request($method, $path, $queryString, $rawBody, $timestamp, $nonce, $clientSecret) {
+    parse_str($queryString ?: "", $query);
+    ksort($query);
+    $normalizedQuery = http_build_query($query, "", "&amp;", PHP_QUERY_RFC3986);
+
+    $bodyHash = hash("sha256", $rawBody ?: "");
+    $canonical = strtoupper($method) . "\n" . $path . "\n" . $normalizedQuery . "\n" . $bodyHash . "\n" . $timestamp . "\n" . $nonce;
+
+    $hmac = hash_hmac("sha256", $canonical, $clientSecret, true);
+    return base64_encode($hmac);
+}
+
+$baseUrl = "https://TU-DOMINIO";
+$clientId = "TU_CLIENT_ID";
+$clientSecret = "TU_CLIENT_SECRET";
+
 $path = "/api/v1/payments/intents";
 $payload = json_encode([
-    "provider" =&gt; "depay",
+    "provider" =&gt; "surpay_fronterizo",
     "amount" =&gt; 12000,
     "currency" =&gt; "CLP",
     "external_order_id" =&gt; "txn_123456",
@@ -381,8 +400,8 @@ $payload = json_encode([
 ]);
 
 $timestamp = strval(time());
-$nonce = uuid_create(UUID_TYPE_RANDOM);
-$idempotency = uuid_create(UUID_TYPE_RANDOM);
+$nonce = generate_uuid_v4();
+$idempotency = generate_uuid_v4();
 $signature = sign_request("POST", $path, "", $payload, $timestamp, $nonce, $clientSecret);
 
 $headers = [
@@ -400,14 +419,27 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 $response = curl_exec($ch);
+$statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+if ($response === false) {
+    throw new RuntimeException("cURL error: " . curl_error($ch));
+}
+
 curl_close($ch);
-?&gt;</code></pre>
+$data = json_decode($response, true);
+
+if ($statusCode &gt;= 400) {
+    throw new RuntimeException("API error " . $statusCode . ": " . $response);
+}
+
+print_r($data);
+</code></pre>
                                                         </div>
 
                                                         <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="java">
                                                                 <pre class="sp-code"><code>HttpClient client = HttpClient.newHttpClient();
 String path = "/api/v1/payments/intents";
-String body = "{\"provider\":\"depay\",\"amount\":12000,\"currency\":\"CLP\",\"external_order_id\":\"txn_123456\",\"expires_in\":900,\"concept\":\"Compra API\",\"qr_from\":\"AR\"}";
+String body = "{\"provider\":\"surpay_fronterizo\",\"amount\":12000,\"currency\":\"CLP\",\"external_order_id\":\"txn_123456\",\"expires_in\":900,\"concept\":\"Compra API\",\"qr_from\":\"AR\"}";
 
 String ts = String.valueOf(Instant.now().getEpochSecond());
 String nonce = UUID.randomUUID().toString();
@@ -426,12 +458,16 @@ HttpRequest req = HttpRequest.newBuilder()
         .POST(HttpRequest.BodyPublishers.ofString(body))
         .build();
 
-HttpResponse&lt;String&gt; res = client.send(req, HttpResponse.BodyHandlers.ofString());</code></pre>
+HttpResponse&lt;String&gt; res = client.send(req, HttpResponse.BodyHandlers.ofString());
+if (res.statusCode() &gt;= 400) {
+    throw new RuntimeException("API error " + res.statusCode() + ": " + res.body());
+}
+System.out.println(res.body());</code></pre>
                                                         </div>
 
                                                         <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="csharp">
                                                                 <pre class="sp-code"><code>var path = "/api/v1/payments/intents";
-var payload = "{\"provider\":\"depay\",\"amount\":12000,\"currency\":\"CLP\",\"external_order_id\":\"txn_123456\",\"expires_in\":900,\"concept\":\"Compra API\",\"qr_from\":\"AR\"}";
+var payload = "{\"provider\":\"surpay_fronterizo\",\"amount\":12000,\"currency\":\"CLP\",\"external_order_id\":\"txn_123456\",\"expires_in\":900,\"concept\":\"Compra API\",\"qr_from\":\"AR\"}";
 var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
 var nonce = Guid.NewGuid().ToString();
 var idem = Guid.NewGuid().ToString();
@@ -446,12 +482,18 @@ req.Headers.Add("X-Timestamp", ts);
 req.Headers.Add("X-Nonce", nonce);
 req.Headers.Add("X-Signature", signature);
 req.Headers.Add("Idempotency-Key", idem);
-var res = await http.SendAsync(req);</code></pre>
+var res = await http.SendAsync(req);
+var bodyRes = await res.Content.ReadAsStringAsync();
+if (!res.IsSuccessStatusCode)
+{
+    throw new Exception($"API error {(int)res.StatusCode}: {bodyRes}");
+}
+Console.WriteLine(bodyRes);</code></pre>
                                                         </div>
 
                                                         <div class="sp-tab-panel" data-tab-panel="create-intent" data-tab-id="go">
                                                                 <pre class="sp-code"><code>path := "/api/v1/payments/intents"
-body := `{"provider":"depay","amount":12000,"currency":"CLP","external_order_id":"txn_123456","expires_in":900,"concept":"Compra API","qr_from":"AR"}`
+body := `{"provider":"surpay_fronterizo","amount":12000,"currency":"CLP","external_order_id":"txn_123456","expires_in":900,"concept":"Compra API","qr_from":"AR"}`
 ts := strconv.FormatInt(time.Now().Unix(), 10)
 nonce := uuid.New().String()
 idem := uuid.New().String()
@@ -465,14 +507,331 @@ req.Header.Set("X-Timestamp", ts)
 req.Header.Set("X-Nonce", nonce)
 req.Header.Set("X-Signature", signature)
 req.Header.Set("Idempotency-Key", idem)
-res, err := http.DefaultClient.Do(req)</code></pre>
+res, err := http.DefaultClient.Do(req)
+if err != nil {
+    return err
+}
+defer res.Body.Close()
+
+raw, _ := io.ReadAll(res.Body)
+if res.StatusCode &gt;= 400 {
+    return fmt.Errorf("api error %d: %s", res.StatusCode, string(raw))
+}
+
+fmt.Println(string(raw))
+return nil</code></pre>
                                                         </div>
+
+                                                        <p class="mt-4 mb-1"><strong>Ejemplo GET /api/v1/payments/intents/&lt;order_id&gt;</strong></p>
+                                                        <div class="sp-language-tabs" data-tab-group="get-intent">
+                                                            <button class="is-active" data-tab-target="curl">cURL</button>
+                                                            <button data-tab-target="js">Node.js</button>
+                                                            <button data-tab-target="python">Python</button>
+                                                            <button data-tab-target="php">PHP</button>
+                                                            <button data-tab-target="java">Java</button>
+                                                            <button data-tab-target="csharp">C#</button>
+                                                            <button data-tab-target="go">Go</button>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel is-active" data-tab-panel="get-intent" data-tab-id="curl">
+                                                            <pre class="sp-code"><code>curl -X GET "https://TU-DOMINIO/api/v1/payments/intents/pay_5f4f8bcb" \
+                              -H "X-Client-Id: TU_CLIENT_ID" \
+                              -H "X-Timestamp: 1716201200" \
+                              -H "X-Nonce: 5f6338c6-8afb-4f70-b58e-39b4368cb80a" \
+                              -H "X-Signature: BASE64_HMAC_SHA256"</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="get-intent" data-tab-id="js">
+                                                            <pre class="sp-code"><code>const path = "/api/v1/payments/intents/pay_5f4f8bcb";
+                            const ts = Math.floor(Date.now() / 1000).toString();
+                            const nonce = crypto.randomUUID();
+                            const signature = signRequest({ method: "GET", path, query: "", rawBody: "", timestamp: ts, nonce, clientSecret: process.env.CLIENT_SECRET });
+
+                            const res = await axios.get(`${process.env.BASE_URL}${path}`, {
+                              headers: { "X-Client-Id": process.env.CLIENT_ID, "X-Timestamp": ts, "X-Nonce": nonce, "X-Signature": signature }
+                            });</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="get-intent" data-tab-id="python">
+                                                            <pre class="sp-code"><code>path = "/api/v1/payments/intents/pay_5f4f8bcb"
+                            ts = str(int(time.time()))
+                            nonce = str(uuid.uuid4())
+                            signature = sign_request("GET", path, "", "", ts, nonce, client_secret)
+
+                            response = requests.get(f"{base_url}{path}", headers={
+                                "X-Client-Id": client_id,
+                                "X-Timestamp": ts,
+                                "X-Nonce": nonce,
+                                "X-Signature": signature,
+                            }, timeout=20)</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="get-intent" data-tab-id="php">
+                                                            <pre class="sp-code"><code>$path = "/api/v1/payments/intents/pay_5f4f8bcb";
+                            $timestamp = strval(time());
+                            $nonce = generate_uuid_v4();
+                            $signature = sign_request("GET", $path, "", "", $timestamp, $nonce, $clientSecret);
+
+                            $ch = curl_init($baseUrl . $path);
+                            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                                "X-Client-Id: $clientId",
+                                "X-Timestamp: $timestamp",
+                                "X-Nonce: $nonce",
+                                "X-Signature: $signature"
+                            ]);
+                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                            $response = curl_exec($ch);
+                            curl_close($ch);</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="get-intent" data-tab-id="java">
+                                                            <pre class="sp-code"><code>String path = "/api/v1/payments/intents/pay_5f4f8bcb";
+String ts = String.valueOf(Instant.now().getEpochSecond());
+String nonce = UUID.randomUUID().toString();
+String canonical = String.join("\\n", "GET", path, "", sha256Hex(""), ts, nonce);
+String signature = signRequest(canonical, clientSecret);
+
+HttpRequest req = HttpRequest.newBuilder()
+    .uri(URI.create(baseUrl + path))
+    .header("X-Client-Id", clientId)
+    .header("X-Timestamp", ts)
+    .header("X-Nonce", nonce)
+    .header("X-Signature", signature)
+    .GET().build();</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="get-intent" data-tab-id="csharp">
+                                                            <pre class="sp-code"><code>var path = "/api/v1/payments/intents/pay_5f4f8bcb";
+var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+var nonce = Guid.NewGuid().ToString();
+var canonical = string.Join("\n", "GET", path, "", Sha256Hex(""), ts, nonce);
+var signature = SignRequest(canonical, clientSecret);
+
+using var req = new HttpRequestMessage(HttpMethod.Get, baseUrl + path);
+req.Headers.Add("X-Client-Id", clientId);
+req.Headers.Add("X-Timestamp", ts);
+req.Headers.Add("X-Nonce", nonce);
+req.Headers.Add("X-Signature", signature);</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="get-intent" data-tab-id="go">
+                                                            <pre class="sp-code"><code>path := "/api/v1/payments/intents/pay_5f4f8bcb"
+ts := strconv.FormatInt(time.Now().Unix(), 10)
+nonce := uuid.New().String()
+canonical := strings.Join([]string{"GET", path, "", sha256Hex(""), ts, nonce}, "\n")
+signature := SignRequest(canonical, clientSecret)
+
+req, _ := http.NewRequest("GET", baseURL+path, nil)
+req.Header.Set("X-Client-Id", clientID)
+req.Header.Set("X-Timestamp", ts)
+req.Header.Set("X-Nonce", nonce)
+req.Header.Set("X-Signature", signature)</code></pre>
+                                                        </div>
+                                                        <p class="mb-1 mt-2"><strong>Response ejemplo</strong></p>
+                                                        <pre class="sp-code"><code>{
+    "order_id": "pay_5f4f8bcb",
+    "external_order_id": "txn_123456",
+    "provider": "surpay_fronterizo",
+    "state": "pending",
+    "amount": 12000.0,
+    "currency": "CLP",
+    "provider_payment_id": "order_abc_001",
+    "payment_url": "https://TU-DOMINIO/pay/token..."
+}</code></pre>
+
+                                                                                                                <p class="mt-4 mb-1"><strong>Ejemplo POST /api/v1/payments/extra-data</strong></p>
+                                                                                                                <div class="sp-language-tabs" data-tab-group="extra-data">
+                                                                                                                                <button class="is-active" data-tab-target="curl">cURL</button>
+                                                                                                                                <button data-tab-target="js">Node.js</button>
+                                                                                                                                <button data-tab-target="python">Python</button>
+                                                                                                                                <button data-tab-target="php">PHP</button>
+                                                                                                                                <button data-tab-target="java">Java</button>
+                                                                                                                                <button data-tab-target="csharp">C#</button>
+                                                                                                                                <button data-tab-target="go">Go</button>
+                                                                                                                </div>
+
+                                                                                                                <div class="sp-tab-panel is-active" data-tab-panel="extra-data" data-tab-id="curl">
+                                                                                                                                <pre class="sp-code"><code>curl -X POST "https://TU-DOMINIO/api/v1/payments/extra-data" \
+    -H "Content-Type: application/json" \
+    -H "X-Client-Id: TU_CLIENT_ID" \
+    -H "X-Timestamp: 1716201300" \
+    -H "X-Nonce: 3d9fbc6f-3688-4211-a912-a46b7f039f57" \
+    -H "X-Signature: BASE64_HMAC_SHA256" \
+    -d '{
+        "order_id": "pay_5f4f8bcb",
+        "extra_data_fields": [
+            {"key": "store", "title": "Tienda", "value": "Sucursal Norte"},
+            {"key": "cashier", "title": "Cajero", "value": "USR-009"}
+        ]
+    }'</code></pre>
+                                                                                                                </div>
+
+                                                                                                                <div class="sp-tab-panel" data-tab-panel="extra-data" data-tab-id="js">
+                                                                                                                                <pre class="sp-code"><code>const path = "/api/v1/payments/extra-data";
+const body = JSON.stringify({
+    order_id: "pay_5f4f8bcb",
+    extra_data_fields: [{ key: "store", title: "Tienda", value: "Sucursal Norte" }]
+});
+const ts = Math.floor(Date.now() / 1000).toString();
+const nonce = crypto.randomUUID();
+const signature = signRequest({ method: "POST", path, query: "", rawBody: body, timestamp: ts, nonce, clientSecret: process.env.CLIENT_SECRET });
+await axios.post(`${process.env.BASE_URL}${path}`, body, { headers: { "Content-Type": "application/json", "X-Client-Id": process.env.CLIENT_ID, "X-Timestamp": ts, "X-Nonce": nonce, "X-Signature": signature } });</code></pre>
+                                                                                                                </div>
+
+                                                                                                                <div class="sp-tab-panel" data-tab-panel="extra-data" data-tab-id="python">
+                                                                                                                                <pre class="sp-code"><code>path = "/api/v1/payments/extra-data"
+payload = {"order_id": "pay_5f4f8bcb", "extra_data_fields": [{"key": "store", "title": "Tienda", "value": "Sucursal Norte"}]}
+raw_body = json.dumps(payload, separators=(",", ":"))
+ts = str(int(time.time()))
+nonce = str(uuid.uuid4())
+signature = sign_request("POST", path, "", raw_body, ts, nonce, client_secret)
+requests.post(f"{base_url}{path}", data=raw_body, headers={"Content-Type": "application/json", "X-Client-Id": client_id, "X-Timestamp": ts, "X-Nonce": nonce, "X-Signature": signature}, timeout=20)</code></pre>
+                                                                                                                </div>
+
+                                                                                                                <div class="sp-tab-panel" data-tab-panel="extra-data" data-tab-id="php">
+                                                                                                                                <pre class="sp-code"><code>$path = "/api/v1/payments/extra-data";
+$payload = json_encode([
+        "order_id" =&gt; "pay_5f4f8bcb",
+        "extra_data_fields" =&gt; [["key" =&gt; "store", "title" =&gt; "Tienda", "value" =&gt; "Sucursal Norte"]]
+]);
+$timestamp = strval(time());
+$nonce = generate_uuid_v4();
+$signature = sign_request("POST", $path, "", $payload, $timestamp, $nonce, $clientSecret);
+// Reutiliza cURL con headers: Content-Type, X-Client-Id, X-Timestamp, X-Nonce, X-Signature</code></pre>
+                                                                                                                </div>
+
+                                                                                                                <div class="sp-tab-panel" data-tab-panel="extra-data" data-tab-id="java">
+                                                                                                                                <pre class="sp-code"><code>String path = "/api/v1/payments/extra-data";
+String body = "{\"order_id\":\"pay_5f4f8bcb\",\"extra_data_fields\":[{\"key\":\"store\",\"title\":\"Tienda\",\"value\":\"Sucursal Norte\"}]}";
+String ts = String.valueOf(Instant.now().getEpochSecond());
+String nonce = UUID.randomUUID().toString();
+String canonical = String.join("\\n", "POST", path, "", sha256Hex(body), ts, nonce);
+String signature = signRequest(canonical, clientSecret);</code></pre>
+                                                                                                                </div>
+
+                                                                                                                <div class="sp-tab-panel" data-tab-panel="extra-data" data-tab-id="csharp">
+                                                                                                                                <pre class="sp-code"><code>var path = "/api/v1/payments/extra-data";
+var payload = "{\"order_id\":\"pay_5f4f8bcb\",\"extra_data_fields\":[{\"key\":\"store\",\"title\":\"Tienda\",\"value\":\"Sucursal Norte\"}]}";
+var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+var nonce = Guid.NewGuid().ToString();
+var canonical = string.Join("\n", "POST", path, "", Sha256Hex(payload), ts, nonce);
+var signature = SignRequest(canonical, clientSecret);</code></pre>
+                                                                                                                </div>
+
+                                                                                                                <div class="sp-tab-panel" data-tab-panel="extra-data" data-tab-id="go">
+                                                                                                                                <pre class="sp-code"><code>path := "/api/v1/payments/extra-data"
+body := `{"order_id":"pay_5f4f8bcb","extra_data_fields":[{"key":"store","title":"Tienda","value":"Sucursal Norte"}]}`
+ts := strconv.FormatInt(time.Now().Unix(), 10)
+nonce := uuid.New().String()
+canonical := strings.Join([]string{"POST", path, "", sha256Hex(body), ts, nonce}, "\n")
+signature := SignRequest(canonical, clientSecret)</code></pre>
+                                                                                                                </div>
+                                                        <p class="mb-1 mt-2"><strong>Response ejemplo</strong></p>
+                                                        <pre class="sp-code"><code>{
+    "order_id": "pay_5f4f8bcb",
+    "updated": true,
+    "extra_data_fields": [
+        {"key": "store", "title": "Tienda", "value": "Sucursal Norte"},
+        {"key": "cashier", "title": "Cajero", "value": "USR-009"}
+    ]
+}</code></pre>
+
+                                                        <p class="mt-4 mb-1"><strong>Ejemplo POST /api/v1/webhooks/providers/&lt;provider&gt;</strong></p>
+                                                        <div class="sp-language-tabs" data-tab-group="provider-webhook">
+                                                            <button class="is-active" data-tab-target="curl">cURL</button>
+                                                            <button data-tab-target="js">Node.js</button>
+                                                            <button data-tab-target="python">Python</button>
+                                                            <button data-tab-target="php">PHP</button>
+                                                            <button data-tab-target="java">Java</button>
+                                                            <button data-tab-target="csharp">C#</button>
+                                                            <button data-tab-target="go">Go</button>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel is-active" data-tab-panel="provider-webhook" data-tab-id="curl">
+                                                            <pre class="sp-code"><code>curl -X POST "https://TU-DOMINIO/api/v1/webhooks/providers/surpay_fronterizo" \
+                              -H "Content-Type: application/json" \
+                              -H "signature: PROVIDER_SIGNATURE" \
+                              -d '{
+                                "order_id": "order_abc_001",
+                                "status": "COMPLETED",
+                                "message": "Payment confirmed"
+                              }'</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="js">
+                                                            <pre class="sp-code"><code>await axios.post(`${baseUrl}/api/v1/webhooks/providers/surpay_fronterizo`, {
+                              order_id: "order_abc_001",
+                              status: "COMPLETED",
+                              message: "Payment confirmed"
+                            }, {
+                              headers: { "Content-Type": "application/json", "signature": process.env.PROVIDER_SIGNATURE }
+                            });</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="python">
+                                                            <pre class="sp-code"><code>requests.post(
+                                f"{base_url}/api/v1/webhooks/providers/surpay_fronterizo",
+                                json={"order_id": "order_abc_001", "status": "COMPLETED", "message": "Payment confirmed"},
+                                headers={"Content-Type": "application/json", "signature": provider_signature},
+                                timeout=20,
+                            )</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="php">
+                                                            <pre class="sp-code"><code>$payload = json_encode([
+                                "order_id" =&gt; "order_abc_001",
+                                "status" =&gt; "COMPLETED",
+                                "message" =&gt; "Payment confirmed",
+                            ]);
+
+                            $ch = curl_init($baseUrl . "/api/v1/webhooks/providers/surpay_fronterizo");
+                            curl_setopt($ch, CURLOPT_POST, true);
+                            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+                            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json", "signature: $providerSignature"]);
+                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                            $response = curl_exec($ch);
+                            curl_close($ch);</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="java">
+                                                            <pre class="sp-code"><code>String path = "/api/v1/webhooks/providers/surpay_fronterizo";
+String body = "{\"order_id\":\"order_abc_001\",\"status\":\"COMPLETED\",\"message\":\"Payment confirmed\"}";
+
+HttpRequest req = HttpRequest.newBuilder()
+    .uri(URI.create(baseUrl + path))
+    .header("Content-Type", "application/json")
+    .header("signature", providerSignature)
+    .POST(HttpRequest.BodyPublishers.ofString(body))
+    .build();</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="csharp">
+                                                            <pre class="sp-code"><code>var path = "/api/v1/webhooks/providers/surpay_fronterizo";
+var payload = "{\"order_id\":\"order_abc_001\",\"status\":\"COMPLETED\",\"message\":\"Payment confirmed\"}";
+
+using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + path);
+req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+req.Headers.Add("signature", providerSignature);</code></pre>
+                                                        </div>
+
+                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="go">
+                                                            <pre class="sp-code"><code>body := `{"order_id":"order_abc_001","status":"COMPLETED","message":"Payment confirmed"}`
+req, _ := http.NewRequest("POST", baseURL+"/api/v1/webhooks/providers/surpay_fronterizo", strings.NewReader(body))
+req.Header.Set("Content-Type", "application/json")
+req.Header.Set("signature", providerSignature)</code></pre>
+                                                        </div>
+                                                        <p class="mb-1 mt-2"><strong>Response ejemplo</strong></p>
+                                                        <pre class="sp-code"><code>{
+    "ok": true,
+    "order_id": "pay_5f4f8bcb",
+    "state": "paid"
+}</code></pre>
+
+                                                        <p class="mt-2"><small>Nota: en webhook, el provider de la ruta debe coincidir con el intent asociado; de lo contrario responde <code>provider_mismatch_webhook</code>.</small></p>
 
                             <p class="mt-3 mb-1"><strong>Proveedor soportado</strong></p>
                             <ul>
-                                <t t-foreach="providers" t-as="provider_item">
-                                    <li><code t-out="provider_item[0]"/> - <span t-out="provider_item[1]"/></li>
-                                </t>
+                                <li><code>surpay_fronterizo</code> - Surpay Fronterizo</li>
                             </ul>
                         </section>
 
@@ -498,39 +857,6 @@ res, err := http.DefaultClient.Do(req)</code></pre>
                                 </table>
                             </div>
                             <p>Cuando uses callback firmado, firma recomendada: HMAC-SHA256 sobre la cadena ordenada <code>status=...&amp;order_id=...&amp;transaction_id=...</code>.</p>
-                        </section>
-
-                        <section id="resolution">
-                            <h3>Resolucion provider/config</h3>
-                            <ol>
-                                <li>Override cliente/proveedor en <code>surpay.api.client.provider.override</code>.</li>
-                                <li>Configuracion activa global del proveedor.</li>
-                                <li>Error <code>provider_not_configured</code> si no existe ninguna.</li>
-                            </ol>
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-sm align-middle">
-                                    <thead>
-                                        <tr>
-                                            <th>Escenario</th>
-                                            <th>Resultado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>Existe override cliente/proveedor</td>
-                                            <td>Se usa override, incluso si la configuracion referenciada esta inactiva.</td>
-                                        </tr>
-                                        <tr>
-                                            <td>No existe override, pero hay configuracion global activa</td>
-                                            <td>Se usa la configuracion global activa del proveedor.</td>
-                                        </tr>
-                                        <tr>
-                                            <td>No existe override ni configuracion global activa</td>
-                                            <td>Error <code>provider_not_configured</code>.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
                         </section>
 
                         <section id="errors">
@@ -565,6 +891,30 @@ res, err := http.DefaultClient.Do(req)</code></pre>
 
             <script type="text/javascript">
                 document.addEventListener("DOMContentLoaded", function () {
+                    const codeBlocks = document.querySelectorAll("pre.sp-code code");
+                    const runtimeOrigin = window.location.origin;
+                    codeBlocks.forEach((codeEl) =&gt; {
+                        const original = codeEl.textContent || "";
+                        const withRuntimeDomain = original.replaceAll("https://TU-DOMINIO", runtimeOrigin);
+                        const normalized = withRuntimeDomain.replace(/\r\n/g, "\n").replace(/^\n+|\n+$/g, "");
+                        const lines = normalized.split("\n");
+
+                        let minIndent = null;
+                        lines.forEach((line) =&gt; {
+                            if (!line.trim()) return;
+                            const match = line.match(/^\s*/);
+                            const indent = match ? match[0].length : 0;
+                            minIndent = minIndent === null ? indent : Math.min(minIndent, indent);
+                        });
+
+                        if (minIndent &amp;&amp; minIndent &gt; 0) {
+                            const dedented = lines.map((line) =&gt; (line.trim() ? line.slice(minIndent) : "")).join("\n");
+                            codeEl.textContent = dedented;
+                        } else {
+                            codeEl.textContent = normalized;
+                        }
+                    });
+
                     const tabGroups = document.querySelectorAll("[data-tab-group]");
                     tabGroups.forEach((group) =&gt; {
                         const groupName = group.getAttribute("data-tab-group");

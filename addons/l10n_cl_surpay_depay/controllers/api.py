@@ -17,6 +17,9 @@ _logger = logging.getLogger(__name__)
 
 class SurpayApiController(http.Controller):
     ALLOWED_QR_FROM = {"AR", "BR", "PE"}
+    PROVIDER_ALIASES = {
+        "surpay_fronterizo": "depay",
+    }
     EXTRA_FIELDS_MAX_ITEMS = 6
     EXTRA_FIELD_TITLE_MAX_LEN = 24
     EXTRA_FIELD_VALUE_MAX_LEN = 60
@@ -49,6 +52,13 @@ class SurpayApiController(http.Controller):
 
     def _supported_providers(self):
         return {item[0] for item in request.env["surpay.provider.config"].PROVIDERS}
+
+    @classmethod
+    def _normalize_provider(cls, provider):
+        provider = (provider or "").strip().lower()
+        if not provider:
+            return ""
+        return cls.PROVIDER_ALIASES.get(provider, provider)
 
     @staticmethod
     def _provider_service_name(provider):
@@ -268,7 +278,8 @@ class SurpayApiController(http.Controller):
         except Exception:
             _logger.error(f"[INTENT DEBUG] Payload inválido: {raw_body}")
             return self._error(400, "invalid_payload", "Request body must be valid JSON.")
-        provider = str(payload.get("provider") or "").strip().lower()
+        requested_provider = str(payload.get("provider") or "").strip().lower()
+        provider = self._normalize_provider(requested_provider)
         amount = payload.get("amount")
         currency = payload.get("currency") or client.default_local_currency
         external_order_id = payload.get("external_order_id")
@@ -277,7 +288,11 @@ class SurpayApiController(http.Controller):
         local_country = self._normalize_country_code(payload.get("local_country") or client.default_local_country)
         qr_from = self._normalize_country_code(payload.get("qr_from") or client.default_qr_from)
 
-        _logger.info(f"[INTENT DEBUG] provider={provider}, amount={amount}, currency={currency}, external_order_id={external_order_id}, concept={concept}, expires_in={expires_in}, local_country={local_country}, qr_from={qr_from}")
+        _logger.info(
+            f"[INTENT DEBUG] provider={provider}, requested_provider={requested_provider}, amount={amount}, "
+            f"currency={currency}, external_order_id={external_order_id}, concept={concept}, expires_in={expires_in}, "
+            f"local_country={local_country}, qr_from={qr_from}"
+        )
 
         if not provider:
             _logger.warning("[INTENT DEBUG] Falta provider en el payload")
@@ -368,6 +383,7 @@ class SurpayApiController(http.Controller):
                 "order_id": order_id,
                 "external_order_id": external_order_id,
                 "provider": provider,
+                "requested_provider": requested_provider or provider,
                 "source_channel": "external",
                 "base_amount": amount,
                 "commission_percent": commission_data["commission_percent"],
@@ -609,7 +625,8 @@ class SurpayApiController(http.Controller):
         csrf=False,
     )
     def provider_webhook(self, provider):
-        provider = (provider or "").strip().lower()
+        route_provider = (provider or "").strip().lower()
+        provider = self._normalize_provider(route_provider)
         if not provider:
             return self._error(400, "missing_provider", "Provider route parameter is required.")
         if provider not in self._supported_providers():
