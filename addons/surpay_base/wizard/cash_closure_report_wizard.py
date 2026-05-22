@@ -312,9 +312,17 @@ class SurpayCashClosureReportWizard(models.TransientModel):
         date_format = lang.date_format if lang else "%d/%m/%Y"
         return date_value.strftime(date_format)
 
+    def _ensure_daily_closures(self, users):
+        self.ensure_one()
+        self.env["surpay.cash.closure"].sudo()._prepare_daily_closures(
+            day_value=self.report_date,
+            seller_user_ids=users.ids,
+        )
+
     def _get_report_data(self):
         self.ensure_one()
         users = self._get_effective_users()
+        self._ensure_daily_closures(users)
         sections = self._build_sections_sql(users)
         company = self.env.company
         logo_b64 = company.logo.decode("utf-8") if company.logo else None

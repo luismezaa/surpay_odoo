@@ -122,60 +122,109 @@ class SurpayCashClosure(models.Model):
         return domain
 
     @api.model
-    def _prepare_daily_closures(self, day_value=None):
-        day, start, end = self._day_window(day_value)
-        tx_model = self.env["surpay.payment.transaction"].sudo()
-        txs = tx_model.search(
+    def _get_surpay_target_user_ids(self):
+        manager_group = self.env.ref("surpay_base.group_surpay_manager", raise_if_not_found=False)
+        restricted_group = self.env.ref("surpay_base.group_surpay_restricted_user", raise_if_not_found=False)
+        group_ids = [group.id for group in (manager_group, restricted_group) if group]
+        if not group_ids:
+            return []
+        users = self.env["res.users"].sudo().search(
             [
-                ("state", "=", "paid"),
-                ("transferred", "=", False),
-                ("create_date", ">=", start),
-                ("create_date", "<", end),
+                ("active", "=", True),
+                ("share", "=", False),
+                ("groups_id", "in", group_ids),
             ]
         )
+        return users.ids
 
-        grouped = {}
-        empty_set = tx_model.browse()
-        for tx in txs:
-            key = tx.seller_user_id.id or False
-            grouped[key] = grouped.get(key, empty_set) | tx
+    @api.model
+    def _prepare_daily_closures(self, day_value=None, seller_user_ids=None):
+        day, start, end = self._day_window(day_value)
+        tx_model = self.env["surpay.payment.transaction"].sudo()
+        domain = [
+            ("state", "=", "paid"),
+            ("transferred", "=", False),
+            ("cash_closure_id", "=", False),
+            ("create_date", ">=", start),
+            ("create_date", "<", end),
+        ]
 
-        for seller_user_id, tx_group in grouped.items():
-            closure = self.sudo().search(
-                [
-                    ("state", "=", "draft"),
-                    ("closure_date", "=", day),
-                    ("seller_user_id", "=", seller_user_id),
-                ],
-                limit=1,
+        if seller_user_ids is None:
+            seller_user_ids = self._get_surpay_target_user_ids()
+        elif hasattr(seller_user_ids, "ids"):
+            seller_user_ids = seller_user_ids.ids
+
+        seller_user_ids = sorted({int(uid) for uid in (seller_user_ids or []) if uid})
+        if not seller_user_ids:
+            return
+        domain.append(("seller_user_id", "in", seller_user_ids))
+
+        # Group by seller in SQL to avoid loading all candidate transactions in memory.
+        tx_groups = tx_model.read_group(domain, ["seller_user_id"], ["seller_user_id"], lazy=False)
+        seller_keys = []
+        for group in tx_groups:
+            seller = group.get("seller_user_id")
+            seller_keys.append((seller and seller[0]) or False)
+
+        if not seller_keys:
+            return
+
+        seller_ids = [sid for sid in seller_keys if sid]
+        closure_domain = [("closure_date", "=", day), ("state", "in", ["draft", "closed"])]
+        if seller_ids and False in seller_keys:
+            closure_domain += ["|", ("seller_user_id", "in", seller_ids), ("seller_user_id", "=", False)]
+        elif seller_ids:
+            closure_domain.append(("seller_user_id", "in", seller_ids))
+        else:
+            closure_domain.append(("seller_user_id", "=", False))
+
+        existing_closures = self.sudo().search(closure_domain, order="id desc")
+        draft_by_seller = {}
+        closed_by_seller = {}
+        for closure in existing_closures:
+            key = closure.seller_user_id.id or False
+            if closure.state == "draft" and key not in draft_by_seller:
+                draft_by_seller[key] = closure
+            elif closure.state == "closed" and key not in closed_by_seller:
+                closed_by_seller[key] = closure
+
+        closures_by_seller = {}
+        to_reopen = self.browse()
+        to_create = []
+        for seller_user_id in seller_keys:
+            closure = draft_by_seller.get(seller_user_id)
+            if closure:
+                closures_by_seller[seller_user_id] = closure
+                continue
+
+            closure = closed_by_seller.get(seller_user_id)
+            if closure:
+                to_reopen |= closure
+                closures_by_seller[seller_user_id] = closure
+                continue
+
+            to_create.append(
+                {
+                    "user_id": seller_user_id or self.env.user.id,
+                    "seller_user_id": seller_user_id,
+                    "closure_date": day,
+                }
             )
-            if not closure:
-                # If the box was already closed for the day and new paid sales arrived,
-                # reopen the same closure so transfer tracking continues in one header.
-                closed_closure = self.sudo().search(
-                    [
-                        ("state", "=", "closed"),
-                        ("closure_date", "=", day),
-                        ("seller_user_id", "=", seller_user_id),
-                    ],
-                    order="id desc",
-                    limit=1,
-                )
-                if closed_closure:
-                    closed_closure.state = "draft"
-                    closure = closed_closure
-                else:
-                    closure = self.sudo().create(
-                        {
-                            "user_id": seller_user_id or self.env.user.id,
-                            "seller_user_id": seller_user_id,
-                            "closure_date": day,
-                        }
-                    )
 
-            unassigned = tx_group.filtered(lambda t: not t.cash_closure_id)
-            if unassigned:
-                unassigned.write({"cash_closure_id": closure.id})
+        if to_reopen:
+            to_reopen.write({"state": "draft"})
+
+        if to_create:
+            created = self.sudo().create(to_create)
+            for closure in created:
+                closures_by_seller[closure.seller_user_id.id or False] = closure
+
+        for seller_user_id in seller_keys:
+            closure = closures_by_seller.get(seller_user_id)
+            if not closure:
+                continue
+            seller_domain = [("seller_user_id", "=", seller_user_id or False)]
+            tx_model.search(domain + seller_domain).write({"cash_closure_id": closure.id})
 
     @api.model
     def action_open_cash_closure(self):
