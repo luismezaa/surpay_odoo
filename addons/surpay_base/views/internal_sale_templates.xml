@@ -49,12 +49,34 @@
                         padding: 28px;
                         box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
                     }
+                    .hero {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 14px;
+                        margin-bottom: 18px;
+                        padding-bottom: 18px;
+                        border-bottom: 1px solid #e5ebf2;
+                        text-align: center;
+                    }
+                    .hero-logo {
+                        width: 164px;
+                        max-width: 64vw;
+                        height: auto;
+                        display: block;
+                        flex: 0 0 auto;
+                        margin-top: 4px;
+                    }
+                    .hero-copy {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
                     h1 {
-                        margin: 0 0 8px;
-                        font-size: 30px;
+                        margin: 0;
+                        font-size: 27px;
                     }
                     .subtitle {
-                        margin: 0 0 22px;
+                        margin: 8px 0 0;
                         color: var(--muted);
                     }
                     .field { margin-bottom: 14px; }
@@ -161,13 +183,30 @@
                         color: #b91c1c;
                         font-weight: 600;
                     }
+                    @media (max-width: 640px) {
+                        .card {
+                            padding: 20px;
+                        }
+                        .hero-logo {
+                            width: 150px;
+                            max-width: 68vw;
+                        }
+                        h1 {
+                            font-size: 24px;
+                        }
+                    }
                 </style>
             </head>
             <body>
                 <div class="wrap">
                     <div class="card">
-                        <h1>Nueva Venta</h1>
-                        <p class="subtitle">Completa los datos y abre el pago en una pestaña nueva.</p>
+                        <div class="hero">
+                            <img class="hero-logo" src="/surpay_base/static/description/src/full_logo.png" alt="Surpay"/>
+                            <div class="hero-copy">
+                                <h1>Nueva Venta</h1>
+                                <p class="subtitle">Completa los datos y abre el pago en una pestaña nueva.</p>
+                            </div>
+                        </div>
 
                         <div class="field">
                             <label for="amount_clp">Precio en Pesos</label>

@@ -265,11 +265,12 @@ func SignRequest(canonical string, clientSecret string) string {
                         <section id="endpoints">
                             <h3>Endpoints</h3>
                             <ul>
-                                <li><code>POST /api/v1/payments/intents</code> - Crear intent de pago.</li>
-                                <li><code>GET /api/v1/payments/intents/&lt;order_id&gt;</code> - Consultar estado del intent.</li>
-                                <li><code>POST /api/v1/payments/extra-data</code> - Adjuntar metadata complementaria.</li>
-                                <li><code>POST /api/v1/webhooks/providers/&lt;provider&gt;</code> - Webhook del proveedor.</li>
+                                <li><code>POST /api/v1/payments/intents</code> - Crea un intent de pago con autenticacion HMAC, provider obligatorio e idempotencia por request.</li>
+                                <li><code>GET /api/v1/payments/intents/&lt;order_id&gt;</code> - Consulta el estado, provider, montos y metadatos del intent ya creado.</li>
+                                <li><code>POST /api/v1/payments/extra-data</code> - Envía datos adicionales que se mostrarán en el reporte de conciliación.</li>
                             </ul>
+
+                            <p class="mb-2">El endpoint <code>extra-data</code> se usa para adjuntar información operativa o de negocio que debe aparecer en el reporte de conciliación. En la versión PDF los valores muy largos se mostrarán truncados para mantener el layout; en la versión Excel se exportarán completos.</p>
 
                             <p class="mb-1"><strong>Request minimo create intent</strong></p>
                             <pre class="sp-code"><code>{
@@ -736,99 +737,6 @@ signature := SignRequest(canonical, clientSecret)</code></pre>
     ]
 }</code></pre>
 
-                                                        <p class="mt-4 mb-1"><strong>Ejemplo POST /api/v1/webhooks/providers/&lt;provider&gt;</strong></p>
-                                                        <div class="sp-language-tabs" data-tab-group="provider-webhook">
-                                                            <button class="is-active" data-tab-target="curl">cURL</button>
-                                                            <button data-tab-target="js">Node.js</button>
-                                                            <button data-tab-target="python">Python</button>
-                                                            <button data-tab-target="php">PHP</button>
-                                                            <button data-tab-target="java">Java</button>
-                                                            <button data-tab-target="csharp">C#</button>
-                                                            <button data-tab-target="go">Go</button>
-                                                        </div>
-
-                                                        <div class="sp-tab-panel is-active" data-tab-panel="provider-webhook" data-tab-id="curl">
-                                                            <pre class="sp-code"><code>curl -X POST "https://TU-DOMINIO/api/v1/webhooks/providers/surpay_fronterizo" \
-                              -H "Content-Type: application/json" \
-                              -H "signature: PROVIDER_SIGNATURE" \
-                              -d '{
-                                "order_id": "order_abc_001",
-                                "status": "COMPLETED",
-                                "message": "Payment confirmed"
-                              }'</code></pre>
-                                                        </div>
-
-                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="js">
-                                                            <pre class="sp-code"><code>await axios.post(`${baseUrl}/api/v1/webhooks/providers/surpay_fronterizo`, {
-                              order_id: "order_abc_001",
-                              status: "COMPLETED",
-                              message: "Payment confirmed"
-                            }, {
-                              headers: { "Content-Type": "application/json", "signature": process.env.PROVIDER_SIGNATURE }
-                            });</code></pre>
-                                                        </div>
-
-                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="python">
-                                                            <pre class="sp-code"><code>requests.post(
-                                f"{base_url}/api/v1/webhooks/providers/surpay_fronterizo",
-                                json={"order_id": "order_abc_001", "status": "COMPLETED", "message": "Payment confirmed"},
-                                headers={"Content-Type": "application/json", "signature": provider_signature},
-                                timeout=20,
-                            )</code></pre>
-                                                        </div>
-
-                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="php">
-                                                            <pre class="sp-code"><code>$payload = json_encode([
-                                "order_id" =&gt; "order_abc_001",
-                                "status" =&gt; "COMPLETED",
-                                "message" =&gt; "Payment confirmed",
-                            ]);
-
-                            $ch = curl_init($baseUrl . "/api/v1/webhooks/providers/surpay_fronterizo");
-                            curl_setopt($ch, CURLOPT_POST, true);
-                            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-                            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json", "signature: $providerSignature"]);
-                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                            $response = curl_exec($ch);
-                            curl_close($ch);</code></pre>
-                                                        </div>
-
-                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="java">
-                                                            <pre class="sp-code"><code>String path = "/api/v1/webhooks/providers/surpay_fronterizo";
-String body = "{\"order_id\":\"order_abc_001\",\"status\":\"COMPLETED\",\"message\":\"Payment confirmed\"}";
-
-HttpRequest req = HttpRequest.newBuilder()
-    .uri(URI.create(baseUrl + path))
-    .header("Content-Type", "application/json")
-    .header("signature", providerSignature)
-    .POST(HttpRequest.BodyPublishers.ofString(body))
-    .build();</code></pre>
-                                                        </div>
-
-                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="csharp">
-                                                            <pre class="sp-code"><code>var path = "/api/v1/webhooks/providers/surpay_fronterizo";
-var payload = "{\"order_id\":\"order_abc_001\",\"status\":\"COMPLETED\",\"message\":\"Payment confirmed\"}";
-
-using var req = new HttpRequestMessage(HttpMethod.Post, baseUrl + path);
-req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
-req.Headers.Add("signature", providerSignature);</code></pre>
-                                                        </div>
-
-                                                        <div class="sp-tab-panel" data-tab-panel="provider-webhook" data-tab-id="go">
-                                                            <pre class="sp-code"><code>body := `{"order_id":"order_abc_001","status":"COMPLETED","message":"Payment confirmed"}`
-req, _ := http.NewRequest("POST", baseURL+"/api/v1/webhooks/providers/surpay_fronterizo", strings.NewReader(body))
-req.Header.Set("Content-Type", "application/json")
-req.Header.Set("signature", providerSignature)</code></pre>
-                                                        </div>
-                                                        <p class="mb-1 mt-2"><strong>Response ejemplo</strong></p>
-                                                        <pre class="sp-code"><code>{
-    "ok": true,
-    "order_id": "pay_5f4f8bcb",
-    "state": "paid"
-}</code></pre>
-
-                                                        <p class="mt-2"><small>Nota: en webhook, el provider de la ruta debe coincidir con el intent asociado; de lo contrario responde <code>provider_mismatch_webhook</code>.</small></p>
-
                             <p class="mt-3 mb-1"><strong>Proveedor soportado</strong></p>
                             <ul>
                                 <li><code>surpay_fronterizo</code> - Surpay Fronterizo</li>
@@ -859,6 +767,203 @@ req.Header.Set("signature", providerSignature)</code></pre>
                             <p>Cuando uses callback firmado, firma recomendada: HMAC-SHA256 sobre la cadena ordenada <code>status=...&amp;order_id=...&amp;transaction_id=...</code>.</p>
                         </section>
 
+                        <section id="merchant-webhook">
+                            <h3>Webhook del comercio</h3>
+                            <p>Si el comercio quiere recibir una notificación directa de Surpay, debe exponer un endpoint propio en su aplicación y registrar esa URL en la configuración del cliente API. Surpay hará un <code>POST</code> a esa URL cuando el pago alcance un estado final.</p>
+                            <div class="sp-highlight">
+                                Recomendacion de ruta: <code>POST https://TU-COMERCIO/api/surpay/webhook</code>.
+                                La URL debe ser pública, responder JSON y validar la firma recibida.
+                            </div>
+                            <p class="mt-3 mb-2"><strong>Headers firmados por Surpay</strong></p>
+                            <ul>
+                                <li><code>X-Surpay-Timestamp</code>: timestamp Unix de la entrega.</li>
+                                <li><code>X-Surpay-Signature</code>: HMAC-SHA256 del body con el secreto webhook del cliente.</li>
+                            </ul>
+                            <p class="mb-2"><strong>Payload base</strong></p>
+                            <pre class="sp-code"><code>{
+  "event_type": "state_change",
+  "contract_version": "v1",
+  "order_id": "pay_5f4f8bcb",
+  "external_order_id": "txn_123456",
+  "provider": "surpay_fronterizo",
+  "provider_payment_id": "order_abc_001",
+  "state": "paid",
+  "amount": 12000,
+  "currency": "CLP",
+  "concept": "Compra API",
+  "customer_email": "cliente@correo.com",
+  "qr_from": "AR"
+}</code></pre>
+                            <p class="mt-3 mb-1"><strong>Ejemplos de implementación del webhook</strong></p>
+                            <div class="sp-language-tabs" data-tab-group="merchant-webhook">
+                                <button class="is-active" data-tab-target="js">Node.js</button>
+                                <button data-tab-target="python">Python</button>
+                                <button data-tab-target="php">PHP</button>
+                                <button data-tab-target="java">Java</button>
+                                <button data-tab-target="csharp">C#</button>
+                                <button data-tab-target="go">Go</button>
+                            </div>
+
+                            <div class="sp-tab-panel is-active" data-tab-panel="merchant-webhook" data-tab-id="js">
+                                <pre class="sp-code"><code>const crypto = require("crypto");
+
+function verifySurpayWebhook(rawBody, timestamp, signature, webhookSecret) {
+  const expected = crypto.createHmac("sha256", webhookSecret).update(rawBody, "utf8").digest("base64");
+    const signatureBuffer = Buffer.from(signature || "", "utf8");
+    const expectedBuffer = Buffer.from(expected, "utf8");
+    if (signatureBuffer.length !== expectedBuffer.length) {
+        return false;
+    }
+    return crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+}
+
+app.post("/api/surpay/webhook", express.raw({ type: "application/json" }), (req, res) =&gt; {
+  const rawBody = req.body.toString("utf8");
+  const timestamp = req.header("X-Surpay-Timestamp");
+  const signature = req.header("X-Surpay-Signature");
+
+  if (!verifySurpayWebhook(rawBody, timestamp, signature, process.env.SURPAY_WEBHOOK_SECRET)) {
+    return res.status(401).json({ ok: false });
+  }
+
+  const event = JSON.parse(rawBody);
+    if (event.state === "paid") {
+        // actualizar pedido interno a pagado
+        // await orders.markPaid(event.order_id);
+    }
+  return res.json({ ok: true });
+});</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="merchant-webhook" data-tab-id="python">
+                                <pre class="sp-code"><code>import base64
+import hashlib
+import hmac
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+def verify_surpay_webhook(raw_body: bytes, signature: str, webhook_secret: str) -&gt; bool:
+    expected = base64.b64encode(hmac.new(webhook_secret.encode(), raw_body, hashlib.sha256).digest()).decode()
+    return hmac.compare_digest(signature or "", expected)
+
+@app.post("/api/surpay/webhook")
+def surpay_webhook():
+    raw_body = request.get_data(cache=False)
+    signature = request.headers.get("X-Surpay-Signature")
+
+    if not verify_surpay_webhook(raw_body, signature, app.config["SURPAY_WEBHOOK_SECRET"]):
+        return jsonify({"ok": False}), 401
+
+    event = request.get_json(force=True)
+    if event.get("state") == "paid":
+        # actualizar pedido interno a pagado
+        # orders.mark_paid(event["order_id"])
+    return jsonify({"ok": True})</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="merchant-webhook" data-tab-id="php">
+                                <pre class="sp-code"><code>$rawBody = file_get_contents("php://input");
+$signature = $_SERVER["HTTP_X_SURPAY_SIGNATURE"] ?? "";
+$secret = getenv("SURPAY_WEBHOOK_SECRET");
+
+$expected = base64_encode(hash_hmac("sha256", $rawBody, $secret, true));
+if (!hash_equals($expected, $signature)) {
+    http_response_code(401);
+    echo json_encode(["ok" =&gt; false]);
+    exit;
+}
+
+$event = json_decode($rawBody, true);
+if (($event["state"] ?? "") === "paid") {
+    // actualizar pedido interno a pagado
+    // $orders->markPaid($event["order_id"]);
+}
+echo json_encode(["ok" =&gt; true]);</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="merchant-webhook" data-tab-id="java">
+                                <pre class="sp-code"><code>@PostMapping("/api/surpay/webhook")
+public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; webhook(@RequestBody byte[] rawBody,
+                                                     @RequestHeader("X-Surpay-Signature") String signature) throws Exception {
+    String secret = System.getenv("SURPAY_WEBHOOK_SECRET");
+    Mac mac = Mac.getInstance("HmacSHA256");
+    mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+    byte[] expectedBytes = mac.doFinal(rawBody);
+    String expected = Base64.getEncoder().encodeToString(expectedBytes);
+
+    if (!MessageDigest.isEqual(signature.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8))) {
+        return ResponseEntity.status(401).body(Map.of("ok", false));
+    }
+
+    JsonNode event = new ObjectMapper().readTree(rawBody);
+    if ("paid".equals(event.path("state").asText())) {
+        // actualizar pedido interno a pagado
+        // orderService.markPaid(event.path("order_id").asText());
+    }
+    return ResponseEntity.ok(Map.of("ok", true));
+}</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="merchant-webhook" data-tab-id="csharp">
+                                <pre class="sp-code"><code>[HttpPost("/api/surpay/webhook")]
+public async Task&lt;IActionResult&gt; SurpayWebhook()
+{
+    using var reader = new StreamReader(Request.Body, Encoding.UTF8);
+    var rawBody = await reader.ReadToEndAsync();
+    var signature = Request.Headers["X-Surpay-Signature"].ToString();
+    var secret = Environment.GetEnvironmentVariable("SURPAY_WEBHOOK_SECRET") ?? "";
+
+    using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
+    var expected = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(rawBody)));
+    if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(signature), Encoding.UTF8.GetBytes(expected)))
+    {
+        return Unauthorized(new { ok = false });
+    }
+
+    var event = JsonSerializer.Deserialize&lt;JsonElement&gt;(rawBody);
+    if (event.TryGetProperty("state", out var stateElement) &amp;&amp; stateElement.GetString() == "paid")
+    {
+        // actualizar pedido interno a pagado
+        // await orderService.MarkPaidAsync(event.GetProperty("order_id").GetString());
+    }
+
+    return Ok(new { ok = true });
+}</code></pre>
+                            </div>
+
+                            <div class="sp-tab-panel" data-tab-panel="merchant-webhook" data-tab-id="go">
+                                <pre class="sp-code"><code>func SurpayWebhook(w http.ResponseWriter, r *http.Request) {
+    rawBody, _ := io.ReadAll(r.Body)
+    signature := r.Header.Get("X-Surpay-Signature")
+    secret := os.Getenv("SURPAY_WEBHOOK_SECRET")
+
+    mac := hmac.New(sha256.New, []byte(secret))
+    mac.Write(rawBody)
+    expected := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+    if !hmac.Equal([]byte(signature), []byte(expected)) {
+        w.WriteHeader(http.StatusUnauthorized)
+        w.Write([]byte(`{"ok":false}`))
+        return
+    }
+
+    var event map[string]any
+    _ = json.Unmarshal(rawBody, &amp;event)
+    if state, _ := event["state"].(string); state == "paid" {
+        // actualizar pedido interno a pagado
+        // orderService.MarkPaid(event["order_id"].(string))
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.Write([]byte(`{"ok":true}`))
+}</code></pre>
+                            </div>
+                            <p class="mb-2">El comercio debe contestar con <code>2xx</code> para confirmar recepción. Si responde error, Surpay reintentará la entrega de forma automática.</p>
+                            <p class="mb-2">Si el <code>state</code> llega como <code>paid</code>, el comercio debería marcar su pedido interno como pagado y continuar su flujo de negocio.</p>
+                            <p class="mb-0">Estados esperados en <code>state</code>: <code>paid</code>, <code>failed</code>, <code>cancelled</code> o <code>expired</code>.</p>
+                        </section>
+
                         <section id="errors">
                             <h3>Errores de contrato</h3>
                             <ul>
@@ -866,7 +971,6 @@ req.Header.Set("signature", providerSignature)</code></pre>
                                 <li><code>unsupported_provider</code>: provider fuera de catalogo soportado.</li>
                                 <li><code>provider_not_configured</code>: sin override ni configuracion global activa.</li>
                                 <li><code>provider_service_not_available</code>: provider soportado sin servicio implementado.</li>
-                                <li><code>provider_mismatch_webhook</code>: provider de ruta diferente al intent asociado.</li>
                                 <li><code>missing_idempotency_key</code>: falta header en create intent.</li>
                             </ul>
                         </section>
@@ -882,7 +986,7 @@ req.Header.Set("signature", providerSignature)</code></pre>
                                 <li>Seleccion explicita de <code>provider</code> por transaccion.</li>
                                 <li>Validacion de <code>qr_from</code> en: <span t-out="', '.join(qr_from_values)"/>.</li>
                                 <li>Definicion final de <code>return_url_behavior</code> con el comercio.</li>
-                                <li>Pruebas de webhook con provider correcto e incorrecto.</li>
+                                <li>Pruebas de conciliacion con datos extra y exportacion PDF/Excel.</li>
                             </ul>
                         </section>
                     </main>
