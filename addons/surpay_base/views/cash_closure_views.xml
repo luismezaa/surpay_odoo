@@ -14,6 +14,7 @@
                 <field name="transaction_count"/>
                 <field name="pending_count"/>
                 <field name="total_amount"/>
+                <field name="total_pending_to_transfer_amount"/>
             </list>
         </field>
     </record>
@@ -29,7 +30,7 @@
                     <field name="state" widget="statusbar" statusbar_visible="draft,closed"/>
                 </header>
                 <sheet>
-                    <group>
+                    <group col="3">
                         <group string="Informacion del cierre">
                             <field name="name" readonly="1"/>
                             <field name="closure_date" readonly="state == 'closed'"/>
@@ -37,14 +38,21 @@
                             <field name="seller_user_id" readonly="state == 'closed'"/>
                             <field name="user_id" readonly="1"/>
                         </group>
-                        <group string="Resumen">
+
+                        <group string="Estado de transferencias">
                             <field name="transaction_count" readonly="1"/>
                             <field name="transferred_count" readonly="1"/>
                             <field name="pending_count" readonly="1"/>
                             <field name="is_fully_transferred" readonly="1"/>
+                        </group>
+
+                        <group string="Totales">
                             <field name="total_base_amount" readonly="1"/>
                             <field name="total_commission_amount" readonly="1"/>
                             <field name="total_amount" readonly="1"/>
+                            <field name="total_to_transfer_amount" readonly="1"/>
+                            <field name="total_transferred_amount" readonly="1"/>
+                            <field name="total_pending_to_transfer_amount" readonly="1"/>
                         </group>
                     </group>
 
@@ -62,6 +70,7 @@
                                 <field name="base_amount" readonly="1"/>
                                 <field name="commission_percent" readonly="1"/>
                                 <field name="commission_amount" readonly="1"/>
+                                <field name="total_to_transfer" readonly="1"/>
                                 <field name="amount" readonly="1"/>
                                 <field name="currency" readonly="1"/>
                                 <field name="transferred" widget="boolean_toggle" readonly="parent.state == 'closed'"/>

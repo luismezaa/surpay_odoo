@@ -125,6 +125,10 @@
                                         <td><span t-esc="section['gross_amount_display']"/></td>
                                     </tr>
                                     <tr>
+                                        <td>(-) Montos de comisión</td>
+                                        <td><span t-esc="section['commission_amount_display']"/></td>
+                                    </tr>
+                                    <tr>
                                         <td><strong>(=) Total conciliado</strong></td>
                                         <td><strong><span t-esc="section['financial_total_display']"/></strong></td>
                                     </tr>

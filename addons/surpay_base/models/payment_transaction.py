@@ -2,7 +2,7 @@ import base64
 import hashlib
 import unicodedata
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -33,6 +33,11 @@ class SurpayPaymentTransaction(models.Model):
     base_amount = fields.Float(string="Monto base")
     commission_percent = fields.Float(string="Comision (%)", digits=(16, 4))
     commission_amount = fields.Float(string="Monto comision")
+    total_to_transfer = fields.Float(
+        string="Total a transferir",
+        compute="_compute_total_to_transfer",
+        store=True,
+    )
     commission_rule_id = fields.Many2one(
         "surpay.commission.rule",
         string="Regla de comision",
@@ -64,6 +69,11 @@ class SurpayPaymentTransaction(models.Model):
     _sql_constraints = [
         ("surpay_payment_transaction_order_uniq", "unique(order_id)", "El order_id debe ser unico."),
     ]
+
+    @api.depends("amount", "commission_amount")
+    def _compute_total_to_transfer(self):
+        for rec in self:
+            rec.total_to_transfer = (rec.amount or 0.0) - (rec.commission_amount or 0.0)
 
     def _format_amount_cl(self, amount):
         return "${}".format("{:,.0f}".format(amount or 0).replace(",", "."))

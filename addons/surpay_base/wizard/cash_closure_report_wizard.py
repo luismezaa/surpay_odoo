@@ -272,7 +272,8 @@ class SurpayCashClosureReportWizard(models.TransientModel):
             gross_amount = sum(t["amount"] for t in all_txs)
             net_amount = sum(t["base_amount"] for t in all_txs)
             commission_amount = sum(t["commission_amount"] for t in all_txs)
-            commission_percent = (commission_amount / gross_amount * 100.0) if gross_amount else 0.0
+            reconciled_amount = gross_amount - commission_amount
+            commission_percent = (commission_amount / net_amount * 100.0) if net_amount else 0.0
 
             transaction_lines = [
                 {
@@ -297,7 +298,7 @@ class SurpayCashClosureReportWizard(models.TransientModel):
                 "commission_percent_display": "{:.2f}%".format(commission_percent),
                 "commission_amount_display": self._format_amount(commission_amount),
                 "net_amount_display": self._format_amount(net_amount),
-                "financial_total_display": self._format_amount(gross_amount),
+                "financial_total_display": self._format_amount(reconciled_amount),
                 "transactions": transaction_lines,
                 "has_data": bool(closures_data),
             })
@@ -472,6 +473,7 @@ class SurpayCashClosureReportWizard(models.TransientModel):
 
             fin_rows = [
                 ("Total aprobado (ventas)", section["gross_amount_display"]),
+                ("(-) Montos de comisión", section["commission_amount_display"]),
                 ("(=) Total conciliado", section["financial_total_display"]),
             ]
             for label, value in fin_rows:

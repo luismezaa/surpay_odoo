@@ -36,6 +36,9 @@ class SurpayCashClosure(models.Model):
     total_amount = fields.Float(string="Total", compute="_compute_totals", store=True)
     total_base_amount = fields.Float(string="Base total", compute="_compute_totals", store=True)
     total_commission_amount = fields.Float(string="Comisión total", compute="_compute_totals", store=True)
+    total_to_transfer_amount = fields.Float(string="Total del cierre", compute="_compute_totals", store=True)
+    total_transferred_amount = fields.Float(string="Total transferido", compute="_compute_totals", store=True)
+    total_pending_to_transfer_amount = fields.Float(string="Pendiente por transferir", compute="_compute_totals", store=True)
     transferred_count = fields.Integer(string="Transferidas", compute="_compute_totals", store=True)
     pending_count = fields.Integer(string="Pendientes", compute="_compute_totals", store=True)
     is_fully_transferred = fields.Boolean(string="Todo transferido", compute="_compute_totals", store=True)
@@ -53,6 +56,20 @@ class SurpayCashClosure(models.Model):
             rec.total_amount = sum(rec.transaction_ids.mapped("amount"))
             rec.total_base_amount = sum(rec.transaction_ids.mapped("base_amount"))
             rec.total_commission_amount = sum(rec.transaction_ids.mapped("commission_amount"))
+            total_closure = 0.0
+            total_transferred = 0.0
+            total_pending = 0.0
+            for tx in rec.transaction_ids:
+                line_to_transfer = (tx.amount or 0.0) - (tx.commission_amount or 0.0)
+                total_closure += line_to_transfer
+                if tx.transferred:
+                    total_transferred += line_to_transfer
+                else:
+                    total_pending += line_to_transfer
+
+            rec.total_to_transfer_amount = total_closure
+            rec.total_transferred_amount = total_transferred
+            rec.total_pending_to_transfer_amount = total_pending
             rec.transferred_count = len(rec.transaction_ids.filtered("transferred"))
             rec.pending_count = rec.transaction_count - rec.transferred_count
             rec.is_fully_transferred = bool(rec.transaction_ids) and rec.pending_count == 0
