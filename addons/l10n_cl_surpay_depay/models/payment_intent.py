@@ -193,6 +193,11 @@ class SurpayPaymentIntent(models.Model):
         for rec in self:
             tx = rec.ensure_transaction()
             seller_user = rec.client_id.resolve_seller_user(partner=rec.partner_id, fallback_to_admin=True)
+            incoming_provider_raw = dict(rec.provider_response_payload or {})
+            existing_provider_raw = dict(tx.provider_raw or {})
+            if isinstance(existing_provider_raw.get("extra_data"), dict):
+                # Preserve extra metadata attached by /api/v1/payments/extra-data.
+                incoming_provider_raw["extra_data"] = existing_provider_raw.get("extra_data")
             vals = {
                 "external_order_id": rec.external_order_id,
                 "provider": rec.provider,
@@ -212,7 +217,7 @@ class SurpayPaymentIntent(models.Model):
                 "client_id": rec.client_id.id,
                 "partner_id": (rec.partner_id or rec.client_id.partner_id).id,
                 "sales_channel": rec.source_channel or "external",
-                "provider_raw": rec.provider_response_payload,
+                "provider_raw": incoming_provider_raw,
                 "seller_user_id": seller_user.id,
             }
             if rec.concept:
