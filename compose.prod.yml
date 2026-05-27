@@ -91,6 +91,8 @@ services:
       - odoo
       - -c
       - /etc/odoo/odoo.conf
+      - -d
+      - ${ODOO_DB_NAME_WS}
       - --db-filter=${ODOO_DB_FILTER}
       - --workers=${ODOO_WORKERS}
       - --max-cron-threads=${ODOO_MAX_CRON_THREADS}
