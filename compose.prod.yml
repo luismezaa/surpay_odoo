@@ -41,20 +41,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      # 1. Le devolvemos una URL simple para mantener contento al script de arranque
-      DATABASE_URLS: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
-      
-      # 2. HACK: Inyectamos el alias inyectando texto directo en la sección [databases]
-      # El script pegará esto abajo de surpay_prod sin chistar, respetando las comas internas.
-      DATABASES_TEXT: "surpay_websocket = host=db port=5432 auth_user=${POSTGRES_USER} dbname=${POSTGRES_DB} pool_mode=session, postgres = host=db port=5432 auth_user=${POSTGRES_USER}"
-
-      AUTH_TYPE: plain
-      POOL_MODE: transaction    
-      MAX_CLIENT_CONN: "1000"
-      DEFAULT_POOL_SIZE: "25"
-      RESERVE_POOL_SIZE: "5"
-      LISTEN_PORT: "6432"
+    # 💡 Eliminamos todas las variables conflictivas (DATABASE_URLS, etc.)
+    # 💡 Forzamos al contenedor a ejecutar el binario directamente:
+    entrypoint: ["pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
+    volumes:
+      # Montamos tus configuraciones explícitas de la carpeta local
+      - ./config/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./config/userlist.txt:/etc/pgbouncer/userlist.txt:ro
     expose:
       - "6432"
     logging:
