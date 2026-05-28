@@ -133,30 +133,31 @@ services:
       db:
         condition: service_healthy
     environment:
-      HOST: db               # <--- CRÍTICO: Conecta directo al contenedor de PostgreSQL
-      PORT: 5432             # <--- CRÍTICO: Puerto nativo de PostgreSQL (Soporta LISTEN/NOTIFY)
+      HOST: db
+      PORT: 5432
       USER: ${POSTGRES_USER}
       PASSWORD: ${POSTGRES_PASSWORD}
-      ODOO_RC: /etc/odoo/odoo.conf
       SURPAY_ENCRYPTION_KEY: ${SURPAY_ENCRYPTION_KEY}
       ODOO_ADMIN_PASSWD: ${ODOO_ADMIN_PASSWD}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    entrypoint: ["/docker-entrypoint-generate-conf.sh"]
+    entrypoint: ["odoo"]
     command:
-      - odoo
-      - -c
-      - /etc/odoo/odoo.conf
+      - --db_host=db
+      - --db_port=5432
+      - --db_user=${POSTGRES_USER}
+      - --db_password=${POSTGRES_PASSWORD}
       - --db-filter=${ODOO_DB_FILTER}
-      - --workers=0          # <--- Modo gevent puro para procesamiento asíncrono
+      - --workers=0
+      - --gevent-port=8072
+      - --proxy_mode=True
     volumes:
-      - odoo_data_prod:/var/lib/odoo # Comparte almacenamiento para persistir adjuntos
+      - odoo_data_prod:/var/lib/odoo
       - ./addons:/mnt/extra-addons:ro
-      - ./config/odoo.prod.conf:/etc/odoo/odoo.conf.template:ro
       - ./backups:/backups
     ports:
-      - "127.0.0.1:8072:8072" # <--- Expone el puerto gevent del chat hacia el host
+      - "127.0.0.1:8072:8072"
     logging:
       driver: json-file
       options:
@@ -164,7 +165,6 @@ services:
         max-file: "${LOG_MAX_FILE}"
     networks:
       - odoo_net_prod
-
   nginx:
     image: nginx:1.27-alpine
     container_name: odoo_surpay_nginx_prod
