@@ -42,10 +42,13 @@ services:
       db:
         condition: service_healthy
     environment:
-      # 1. Eliminamos DATABASE_URLS para que no intente autogenerar basura.
-      # 2. Usamos DB_SPECS para inyectar las reglas con sintaxis nativa de PgBouncer:
-      DB_SPECS: "surpay_prod = host=db port=5432 auth_user=${POSTGRES_USER}, surpay_websocket = host=db port=5432 auth_user=${POSTGRES_USER} dbname=${POSTGRES_DB} pool_mode=session"
+      # 1. Le devolvemos una URL simple para mantener contento al script de arranque
+      DATABASE_URLS: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
       
+      # 2. HACK: Inyectamos el alias inyectando texto directo en la sección [databases]
+      # El script pegará esto abajo de surpay_prod sin chistar, respetando las comas internas.
+      DATABASES_TEXT: "surpay_websocket = host=db port=5432 auth_user=${POSTGRES_USER} dbname=${POSTGRES_DB} pool_mode=session, postgres = host=db port=5432 auth_user=${POSTGRES_USER}"
+
       AUTH_TYPE: plain
       POOL_MODE: transaction    
       MAX_CLIENT_CONN: "1000"
