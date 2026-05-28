@@ -157,7 +157,7 @@ services:
       - ./addons:/mnt/extra-addons:ro
       - ./backups:/backups
     ports:
-      - "127.0.0.1:8072:8072"
+      - "127.0.0.1:8072:8069"
     logging:
       driver: json-file
       options:
