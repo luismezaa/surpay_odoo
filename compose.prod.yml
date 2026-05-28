@@ -41,11 +41,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    entrypoint: ["pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
-    volumes:
-      - ./config/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
-      # 💡 Mapeamos directamente tu archivo existente:
-      - ./config/pgbouncer_users.txt:/etc/pgbouncer/pgbouncer_users.txt:ro
+    environment:
+      DATABASE_URLS: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB},postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/postgres
+      AUTH_TYPE: plain
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "25"
+      RESERVE_POOL_SIZE: "5"
+      LISTEN_PORT: "6432"
     expose:
       - "6432"
     logging:
@@ -55,6 +58,7 @@ services:
         max-file: "${LOG_MAX_FILE}"
     networks:
       - odoo_net_prod
+
   odoo:
     build:
       context: .
@@ -87,8 +91,6 @@ services:
       - odoo
       - -c
       - /etc/odoo/odoo.conf
-      - -d
-      - ${ODOO_DB_NAME_WS}
       - --db-filter=${ODOO_DB_FILTER}
       - --workers=${ODOO_WORKERS}
       - --max-cron-threads=${ODOO_MAX_CRON_THREADS}
