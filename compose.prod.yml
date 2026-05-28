@@ -42,7 +42,10 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URLS: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB},postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/surpay_websocket?dbname=${POSTGRES_DB},postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/postgres"
+      # 1. Eliminamos DATABASE_URLS para que no intente autogenerar basura.
+      # 2. Usamos DB_SPECS para inyectar las reglas con sintaxis nativa de PgBouncer:
+      DB_SPECS: "surpay_prod = host=db port=5432 auth_user=${POSTGRES_USER}, surpay_websocket = host=db port=5432 auth_user=${POSTGRES_USER} dbname=${POSTGRES_DB} pool_mode=session"
+      
       AUTH_TYPE: plain
       POOL_MODE: transaction    
       MAX_CLIENT_CONN: "1000"
@@ -58,7 +61,6 @@ services:
         max-file: "${LOG_MAX_FILE}"
     networks:
       - odoo_net_prod
-
   odoo:
     build:
       context: .
