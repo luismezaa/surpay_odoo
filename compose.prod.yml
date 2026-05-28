@@ -151,7 +151,7 @@ services:
       - --db-filter=${ODOO_DB_FILTER}
       - --workers=0
       - --gevent-port=8072
-      - --proxy_mode=True
+      - --proxy-mode
     volumes:
       - odoo_data_prod:/var/lib/odoo
       - ./addons:/mnt/extra-addons:ro
