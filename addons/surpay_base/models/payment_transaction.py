@@ -80,9 +80,10 @@ class SurpayPaymentTransaction(models.Model):
 
     def _voucher_operation_number(self):
         self.ensure_one()
+        client_id = self.sudo().client_id.id
         raw_value = "{}|{}|{}".format(
             self.id or "",
-            self.client_id.id or "",
+            client_id or "",
             self.create_date or "",
         )
         digest = hashlib.sha256(raw_value.encode("utf-8")).hexdigest()
@@ -95,10 +96,11 @@ class SurpayPaymentTransaction(models.Model):
 
     def _build_ascii_voucher(self):
         self.ensure_one()
+        tx_sudo = self.sudo()
         operation_number = self._voucher_operation_number()
         created_at = fields.Datetime.context_timestamp(self, self.create_date) if self.create_date else None
         created_at_text = created_at.strftime("%d/%m/%Y %H:%M:%S") if created_at else ""
-        client_name = self._to_ascii(self.client_id.display_name)
+        client_name = self._to_ascii(tx_sudo.client_id.display_name)
         concept = self._to_ascii(self.concept)
         amount_text = self._format_amount_cl(self.amount)
         base_amount_text = self._format_amount_cl(self.base_amount)
@@ -131,6 +133,16 @@ class SurpayPaymentTransaction(models.Model):
 
     def action_download_zebra_voucher(self):
         self.ensure_one()
+        self.check_access_rights("read")
+        self.check_access_rule("read")
+
+        # Restricted users can only download vouchers from transactions owned by their user.
+        if self.env.user.has_group("surpay_base.group_surpay_restricted_user") and not self.env.user.has_group(
+            "surpay_base.group_surpay_manager"
+        ):
+            if self.seller_user_id != self.env.user:
+                raise UserError(_("Solo puede descargar vouchers de sus propias transacciones."))
+
         if self.state != "paid":
             raise UserError(_("Solo se puede descargar voucher para transacciones pagadas."))
 
