@@ -44,6 +44,13 @@ class SurpayProviderConfig(models.Model):
         required=True,
         help="Habilitar o deshabilitar esta configuracion",
     )
+    user_id = fields.Many2one(
+        "res.users",
+        string="Usuario proveedor",
+        index=True,
+        ondelete="set null",
+        help="Usuario interno autorizado a ver las transacciones de esta configuracion.",
+    )
 
     # Encrypted credentials
     api_key = fields.Char(
@@ -105,6 +112,11 @@ class SurpayProviderConfig(models.Model):
             "surpay_provider_config_uniq",
             "unique(provider, environment)",
             "Solo se permite una configuracion por combinacion proveedor/entorno.",
+        ),
+        (
+            "surpay_provider_config_user_uniq",
+            "unique(user_id)",
+            "Solo se permite una configuracion asignada por usuario.",
         ),
     ]
 

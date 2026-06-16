@@ -20,6 +20,13 @@
         <field name="comment">Puede acceder al backend de Odoo, pero solo ve el arbol de menus de Surpay.</field>
     </record>
 
+    <record id="group_surpay_provider_user" model="res.groups">
+        <field name="name">Surpay Provider User</field>
+        <field name="category_id" ref="surpay_base.module_category_surpay"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Puede acceder al panel de ventas de su proveedor y ver sus transacciones.</field>
+    </record>
+
     <!-- Record rules: block URL-level access to non-Surpay models for restricted users -->
 
     <record id="rule_surpay_restricted_no_partner" model="ir.rule">
@@ -53,6 +60,17 @@
         <field name="perm_write" eval="True"/>
         <field name="perm_create" eval="True"/>
         <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_surpay_provider_transactions_by_config" model="ir.rule">
+        <field name="name">Surpay Provider: transacciones de su configuracion</field>
+        <field name="model_id" ref="surpay_base.model_surpay_payment_transaction"/>
+        <field name="groups" eval="[(4, ref('surpay_base.group_surpay_provider_user'))]"/>
+        <field name="domain_force">[('provider_config_id.user_id', '=', user.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
     </record>
 
 </odoo>

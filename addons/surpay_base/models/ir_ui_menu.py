@@ -8,7 +8,9 @@ class IrUiMenu(models.Model):
         menus = super().load_web_menus(debug)
 
         user = self.env.user
-        if not user.has_group("surpay_base.group_surpay_restricted_user"):
+        if not user.has_group("surpay_base.group_surpay_restricted_user") and not user.has_group(
+            "surpay_base.group_surpay_provider_user"
+        ):
             return menus
         if user.has_group("base.group_system"):
             return menus

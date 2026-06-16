@@ -9,6 +9,7 @@
                 <field name="provider" />
                 <field name="environment" />
                 <field name="state" />
+                <field name="user_id" />
                 <field name="last_test_date" />
                 <field name="write_date" />
             </list>
@@ -35,6 +36,7 @@
                         <group string="Datos del proveedor">
                             <field name="provider" />
                             <field name="environment" />
+                            <field name="user_id" />
                             <field name="logo" widget="image" class="oe_avatar" options="{'size': [128, 128]}"/>
                         </group>
                         <group string="Metadatos">
@@ -109,7 +111,7 @@
     <menuitem
         id="surpay_menu_root"
         name="Surpay"
-        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_manager,base.group_system"
+        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_provider_user,surpay_base.group_surpay_manager,base.group_system"
         sequence="60"
     />
 

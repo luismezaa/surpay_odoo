@@ -11,6 +11,7 @@
         name="Nueva Venta"
         parent="surpay_menu_root"
         action="surpay_new_sale_url_action"
+        groups="surpay_base.group_surpay_restricted_user,surpay_base.group_surpay_manager,base.group_system"
         sequence="0"
     />
 

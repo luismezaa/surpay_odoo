@@ -4,6 +4,7 @@ import logging
 import base64
 
 from odoo import http
+from odoo.exceptions import AccessError
 from odoo.http import request
 
 
@@ -37,6 +38,11 @@ class SurpayInternalSaleController(http.Controller):
         if menu and action:
             return f"/web#menu_id={menu.id}&action={action.id}"
         return "/web"
+
+    def _ensure_new_sale_access(self):
+        user = request.env.user
+        if user.has_group("surpay_base.group_surpay_provider_user") and not user.has_group("surpay_base.group_surpay_manager"):
+            raise AccessError("No tiene acceso a Nueva Venta.")
 
     def _active_provider_configs(self):
         return request.env["surpay.provider.config"].sudo().search([
@@ -201,6 +207,7 @@ class SurpayInternalSaleController(http.Controller):
 
     @http.route("/surpay/new-sale", type="http", auth="user", methods=["GET"], csrf=False)
     def new_sale_page(self, **kwargs):
+        self._ensure_new_sale_access()
         configs = self._active_provider_configs()
         values = {
             "provider_configs": configs,
@@ -234,6 +241,7 @@ class SurpayInternalSaleController(http.Controller):
 
     @http.route("/surpay/new-sale/start", type="json", auth="user", methods=["POST"], csrf=False)
     def new_sale_start(self):
+        self._ensure_new_sale_access()
         payload = {}
         try:
             raw = request.httprequest.get_data(cache=False, as_text=True) or ""
@@ -285,6 +293,7 @@ class SurpayInternalSaleController(http.Controller):
 
     @http.route("/surpay/new-sale/processing/<string:order_id>", type="http", auth="user", methods=["GET"], csrf=False)
     def new_sale_processing(self, order_id, **kwargs):
+        self._ensure_new_sale_access()
         tx = request.env["surpay.payment.transaction"].sudo().search([("order_id", "=", order_id)], limit=1)
         if not tx:
             return request.not_found()
@@ -301,6 +310,7 @@ class SurpayInternalSaleController(http.Controller):
 
     @http.route("/surpay/new-sale/status/<string:order_id>", type="json", auth="user", methods=["POST"], csrf=False)
     def new_sale_status(self, order_id):
+        self._ensure_new_sale_access()
         tx = request.env["surpay.payment.transaction"].sudo().search([("order_id", "=", order_id)], limit=1)
         if not tx:
             return {"error": {"message": "Transacción no encontrada."}}
@@ -351,6 +361,7 @@ class SurpayInternalSaleController(http.Controller):
 
     @http.route("/surpay/new-sale/success/<string:order_id>", type="http", auth="user", methods=["GET"], csrf=False)
     def new_sale_success(self, order_id, **kwargs):
+        self._ensure_new_sale_access()
         tx = request.env["surpay.payment.transaction"].sudo().search([("order_id", "=", order_id)], limit=1)
         return request.render(
             "surpay_base.new_sale_success_page",
@@ -363,6 +374,7 @@ class SurpayInternalSaleController(http.Controller):
 
     @http.route("/surpay/new-sale/failed/<string:order_id>", type="http", auth="user", methods=["GET"], csrf=False)
     def new_sale_failed(self, order_id, **kwargs):
+        self._ensure_new_sale_access()
         tx = request.env["surpay.payment.transaction"].sudo().search([("order_id", "=", order_id)], limit=1)
         return request.render(
             "surpay_base.new_sale_failed_page",
