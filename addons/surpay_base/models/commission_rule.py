@@ -38,9 +38,15 @@ class SurpayCommissionRule(models.Model):
         default=0.0,
         help="Porcentaje a sumar al monto base enviado al proveedor.",
     )
+    reconciliation_commission_percent = fields.Float(
+        string="Comision de conciliacion (%)",
+        digits=(16, 4),
+        default=0.0,
+        help="Porcentaje aplicado al total a transferir en conciliaciones.",
+    )
     note = fields.Text(string="Notas")
 
-    @api.depends("provider", "client_id", "sales_channel", "commission_percent")
+    @api.depends("provider", "client_id", "sales_channel", "commission_percent", "reconciliation_commission_percent")
     def _compute_name(self):
         provider_labels = dict(self._fields["provider"].selection)
         channel_labels = dict(self._fields["sales_channel"].selection)
@@ -48,13 +54,18 @@ class SurpayCommissionRule(models.Model):
             provider_txt = provider_labels.get(rec.provider, rec.provider or "-")
             client_txt = rec.client_id.name or "Todos los clientes"
             channel_txt = channel_labels.get(rec.sales_channel, "Todos los canales")
-            rec.name = f"{provider_txt} | {client_txt} | {channel_txt} | {rec.commission_percent:.4f}%"
+            rec.name = (
+                f"{provider_txt} | {client_txt} | {channel_txt} | "
+                f"{rec.commission_percent:.4f}% + RC {rec.reconciliation_commission_percent:.4f}%"
+            )
 
     @api.constrains("commission_percent")
     def _check_percent(self):
         for rec in self:
             if rec.commission_percent < 0:
                 raise ValidationError(_("La comision no puede ser negativa."))
+            if rec.reconciliation_commission_percent < 0:
+                raise ValidationError(_("La comision de conciliacion no puede ser negativa."))
 
     @api.constrains("provider", "client_id", "sales_channel")
     def _check_duplicate_scope(self):
@@ -131,3 +142,37 @@ class SurpayCommissionRule(models.Model):
             "commission_amount": float(commission_amount),
             "total_amount": float(total_amount),
         }
+
+    @api.model
+    def resolve_reconciliation_percent(self, provider, client_id=False, sales_channel=False):
+        rule = self.resolve_rule(provider, client_id=client_id, sales_channel=sales_channel)
+        if not rule:
+            return 0.0
+        return float(rule.reconciliation_commission_percent or 0.0)
+
+    def _refresh_draft_reconciliations(self):
+        reconciliation_model = self.env["surpay.payment.reconciliation"].sudo()
+        drafts = reconciliation_model.search([("state", "=", "draft")])
+        for rec in drafts:
+            provider, client_id, sales_channel = rec._get_commission_scope_values()
+            pct = self.resolve_reconciliation_percent(provider, client_id=client_id, sales_channel=sales_channel)
+            total = rec.total_to_transfer_amount or 0.0
+            commission_amount = total * pct / 100.0
+            expected_total = commission_amount if pct else 0.0
+
+            vals = {}
+            if rec.reconciliation_commission_percent != pct:
+                vals["reconciliation_commission_percent"] = pct
+            if rec.reconciliation_commission_amount != commission_amount:
+                vals["reconciliation_commission_amount"] = commission_amount
+            if rec.total_invoice_expected != expected_total:
+                vals["total_invoice_expected"] = expected_total
+
+            if vals:
+                rec.write(vals)
+
+    def write(self, vals):
+        res = super().write(vals)
+        if "reconciliation_commission_percent" in vals:
+            self._refresh_draft_reconciliations()
+        return res

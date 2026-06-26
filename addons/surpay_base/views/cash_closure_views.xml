@@ -11,6 +11,7 @@
                 <field name="client_id"/>
                 <field name="seller_user_id"/>
                 <field name="user_id"/>
+                <field name="reconciliation_state"/>
                 <field name="transaction_count"/>
                 <field name="pending_count"/>
                 <field name="total_amount"/>
@@ -27,6 +28,15 @@
                 <header>
                     <button name="action_open_report_wizard" type="object" string="Informe PDF"/>
                     <button name="action_close_cash" type="object" string="Cerrar caja" class="btn-primary" invisible="state != 'draft'"/>
+                    <button
+                        name="action_emergency_reopen_cash"
+                        type="object"
+                        string="Reversa emergencia"
+                        class="btn-secondary"
+                        invisible="state != 'closed'"
+                        groups="surpay_base.group_surpay_manager,base.group_system"
+                        confirm="Esta accion reabre el cierre y desmarca todas las transferencias. Desea continuar?"
+                    />
                     <field name="state" widget="statusbar" statusbar_visible="draft,closed"/>
                 </header>
                 <sheet>
@@ -37,6 +47,7 @@
                             <field name="client_id" readonly="state == 'closed'"/>
                             <field name="seller_user_id" readonly="state == 'closed'"/>
                             <field name="user_id" readonly="1"/>
+                            <field name="reconciliation_state" readonly="1"/>
                         </group>
 
                         <group string="Estado de transferencias">
@@ -56,6 +67,10 @@
                         </group>
                     </group>
 
+                    <group string="Comprobantes de transferencia">
+                        <field name="transfer_proof_attachment_ids" widget="many2many_binary" readonly="1"/>
+                    </group>
+
                     <group string="Transacciones incluidas">
                         <field name="transaction_ids" readonly="state == 'closed'">
                             <list create="0" delete="0" editable="bottom">
@@ -73,7 +88,6 @@
                                 <field name="total_to_transfer" readonly="1"/>
                                 <field name="amount" readonly="1"/>
                                 <field name="currency" readonly="1"/>
-                                <field name="transferred" widget="boolean_toggle" readonly="parent.state == 'closed'"/>
                             </list>
                         </field>
                     </group>
@@ -92,6 +106,7 @@
                 <field name="client_id"/>
                 <field name="seller_user_id"/>
                 <field name="user_id"/>
+                <field name="reconciliation_state"/>
                 <field name="sales_channel"/>
                 <field name="provider"/>
                 <filter name="today" string="Hoy" domain="[('closure_date', '=', context_today())]"/>

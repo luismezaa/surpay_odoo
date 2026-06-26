@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="surpay_payment_reconciliation_list" model="ir.ui.view">
+        <field name="name">surpay.payment.reconciliation.list</field>
+        <field name="model">surpay.payment.reconciliation</field>
+        <field name="arch" type="xml">
+            <list string="Conciliaciones" create="1" edit="1" delete="0">
+                <field name="name"/>
+                <field name="period_label" string="Periodo"/>
+                <field name="proof_document_name" string="Comprobante"/>
+                <field name="closure_proof_count" string="N° comprobantes"/>
+                <button name="action_open_closure_proofs" type="object" string="Descargar comprobantes" class="btn-link" invisible="closure_proof_count == 0"/>
+                <field name="total_to_transfer_amount" string="Monto transferido"/>
+                <field name="seller_user_id"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="surpay_payment_reconciliation_form" model="ir.ui.view">
+        <field name="name">surpay.payment.reconciliation.form</field>
+        <field name="model">surpay.payment.reconciliation</field>
+        <field name="arch" type="xml">
+            <form string="Conciliacion de Pagos">
+                <header>
+                    <button
+                        name="action_start_review"
+                        type="object"
+                        string="Iniciar conciliacion"
+                        class="btn-primary"
+                        invisible="state != 'draft'"
+                        groups="surpay_base.group_surpay_manager,base.group_system"
+                    />
+                    <button
+                        name="action_restricted_approve_proof"
+                        type="object"
+                        string="Aprobar comprobante"
+                        class="btn-primary"
+                        invisible="state != 'proof_in_review'"
+                        groups="surpay_base.group_surpay_restricted_user"
+                    />
+                    <button
+                        name="action_restricted_reject_proof"
+                        type="object"
+                        string="Rechazar comprobante"
+                        class="btn-secondary"
+                        invisible="state != 'proof_in_review'"
+                        groups="surpay_base.group_surpay_restricted_user"
+                    />
+                    <button
+                        name="action_manager_reopen_proof"
+                        type="object"
+                        string="Reenviar comprobante"
+                        class="btn-primary"
+                        invisible="state != 'proof_rejected'"
+                        groups="surpay_base.group_surpay_manager,base.group_system"
+                    />
+                    <button
+                        name="action_manager_accept_invoice"
+                        type="object"
+                        string="Aceptar factura"
+                        class="btn-primary"
+                        invisible="state != 'invoice_in_review'"
+                        groups="surpay_base.group_surpay_manager,base.group_system"
+                    />
+                    <button
+                        name="action_manager_reject_invoice"
+                        type="object"
+                        string="Rechazar factura"
+                        class="btn-secondary"
+                        invisible="state != 'invoice_in_review'"
+                        groups="surpay_base.group_surpay_manager,base.group_system"
+                    />
+                    <button
+                        name="action_restricted_send_invoice_review"
+                        type="object"
+                        string="Enviar a revision de factura"
+                        class="btn-primary"
+                        invisible="state != 'invoice_rejected'"
+                        groups="surpay_base.group_surpay_restricted_user"
+                    />
+                    <button
+                        name="action_debug_force_delete"
+                        type="object"
+                        string="Eliminar conciliacion (debug)"
+                        class="btn-danger"
+                        invisible="state == 'draft'"
+                        groups="base.group_no_one"
+                        confirm="Esta accion eliminara la conciliacion y liberara sus cierres. Desea continuar?"
+                    />
+                    <field
+                        name="state"
+                        widget="statusbar"
+                        statusbar_visible="draft,proof_in_review,proof_rejected,invoice_in_review,invoice_rejected,closed"
+                    />
+                </header>
+                <sheet>
+                    <group col="3">
+                        <group string="Informacion general">
+                            <field name="name" readonly="1"/>
+                            <field name="seller_user_id" readonly="state != 'draft' or closure_ids" required="1"/>
+                            <field name="period_label" readonly="1"/>
+                            <field name="date_from" readonly="1"/>
+                            <field name="date_to" readonly="1"/>
+                        </group>
+                        <group string="Montos">
+                            <field name="total_to_transfer_amount" readonly="1"/>
+                            <field name="reconciliation_commission_percent" readonly="1"/>
+                            <field name="reconciliation_commission_amount" readonly="1"/>
+                            <field name="total_invoice_expected" string="Total factura esperada (solo comision)" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Cierres incluidos">
+                        <field name="closure_ids" readonly="state != 'draft' or not seller_user_id" domain="[('state', '=', 'closed'), ('reconciliation_state', '=', 'none'), ('seller_user_id', '=', seller_user_id)]">
+                            <list create="0" delete="0">
+                                <field name="display_name" string="Nombre"/>
+                                <field name="closure_date"/>
+                                <field name="seller_user_id"/>
+                                <field name="total_to_transfer_amount"/>
+                                <field name="reconciliation_state"/>
+                            </list>
+                        </field>
+                    </group>
+
+                    <group string="Documentos">
+                        <field name="closure_proof_attachment_ids" widget="many2many_binary" readonly="1"/>
+                    </group>
+
+                    <notebook>
+                        <page string="Bitacora">
+                            <field name="log_ids" readonly="1">
+                                <list create="0" delete="0">
+                                    <field name="create_date" string="Fecha"/>
+                                    <field name="event_type" string="Evento"/>
+                                    <field name="state_from" string="Desde"/>
+                                    <field name="state_to" string="Hasta"/>
+                                    <field name="user_id" string="Usuario"/>
+                                    <field name="message" string="Mensaje"/>
+                                    <field name="note" string="Observacion"/>
+                                    <field name="attachment_ids" widget="many2many_tags" string="Adjuntos"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Productos">
+                            <field name="product_line_ids" readonly="1">
+                                <list create="0" delete="0">
+                                    <field name="product_name" string="Concept"/>
+                                    <field name="amount" string="Monto"/>
+                                    <field name="extra_info" string="Extra info"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="surpay_payment_reconciliation_search" model="ir.ui.view">
+        <field name="name">surpay.payment.reconciliation.search</field>
+        <field name="model">surpay.payment.reconciliation</field>
+        <field name="arch" type="xml">
+            <search string="Conciliaciones">
+                <field name="name"/>
+                <field name="seller_user_id"/>
+                <filter name="draft" string="Borrador" domain="[('state', '=', 'draft')]"/>
+                <filter name="in_review" string="En revision" domain="[('state', 'in', ['proof_in_review','invoice_in_review'])]"/>
+                <filter name="closed" string="Cerrado" domain="[('state', '=', 'closed')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="surpay_payment_reconciliation_action" model="ir.actions.act_window">
+        <field name="name">Conciliacion de Pagos</field>
+        <field name="res_model">surpay.payment.reconciliation</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'debug': context.get('debug')}</field>
+    </record>
+
+    <menuitem
+        id="surpay_payment_reconciliation_menu"
+        name="Conciliacion de Pagos"
+        parent="surpay_menu_root"
+        action="surpay_payment_reconciliation_action"
+        groups="surpay_base.group_surpay_manager,surpay_base.group_surpay_restricted_user,base.group_system"
+        sequence="6"
+    />
+</odoo>

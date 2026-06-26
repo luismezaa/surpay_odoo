@@ -42,6 +42,28 @@ class SurpayCashClosure(models.Model):
     transferred_count = fields.Integer(string="Transferidas", compute="_compute_totals", store=True)
     pending_count = fields.Integer(string="Pendientes", compute="_compute_totals", store=True)
     is_fully_transferred = fields.Boolean(string="Todo transferido", compute="_compute_totals", store=True)
+    transfer_proof_attachment_ids = fields.Many2many(
+        "ir.attachment",
+        "surpay_cash_closure_transfer_proof_rel",
+        "cash_closure_id",
+        "attachment_id",
+        string="Comprobantes de transferencia",
+        copy=False,
+    )
+    reconciliation_state = fields.Selection(
+        selection=[("none", "Sin conciliacion"), ("conciliating", "Conciliando"), ("conciliated", "Conciliado")],
+        string="Estado conciliacion",
+        default="none",
+        required=True,
+        index=True,
+    )
+    reconciliation_id = fields.Many2one(
+        "surpay.payment.reconciliation",
+        string="Conciliacion",
+        ondelete="set null",
+        index=True,
+        copy=False,
+    )
 
     @api.depends(
         "transaction_ids",
@@ -138,6 +160,21 @@ class SurpayCashClosure(models.Model):
             domain.append(("seller_user_id", "=", False))
         return domain
 
+    def _finalize_close_with_transfer_proof(self):
+        for rec in self:
+            if rec.state != "draft":
+                raise UserError(_("Este cierre ya esta cerrado."))
+            if not rec.transaction_ids:
+                rec.action_load_transactions()
+            if not rec.transaction_ids:
+                raise UserError(_("No hay transacciones pagadas disponibles para cerrar en el rango seleccionado."))
+            if not rec.transfer_proof_attachment_ids:
+                raise UserError(_("Debe adjuntar al menos un comprobante de transferencia antes de cerrar la caja."))
+
+            # El cierre ahora marca todas las transacciones como transferidas en bloque.
+            rec.transaction_ids.write({"transferred": True})
+            rec.state = "closed"
+
     @api.model
     def _get_surpay_target_user_ids(self):
         manager_group = self.env.ref("surpay_base.group_surpay_manager", raise_if_not_found=False)
@@ -197,26 +234,16 @@ class SurpayCashClosure(models.Model):
 
         existing_closures = self.sudo().search(closure_domain, order="id desc")
         draft_by_seller = {}
-        closed_by_seller = {}
         for closure in existing_closures:
             key = closure.seller_user_id.id or False
             if closure.state == "draft" and key not in draft_by_seller:
                 draft_by_seller[key] = closure
-            elif closure.state == "closed" and key not in closed_by_seller:
-                closed_by_seller[key] = closure
 
         closures_by_seller = {}
-        to_reopen = self.browse()
         to_create = []
         for seller_user_id in seller_keys:
             closure = draft_by_seller.get(seller_user_id)
             if closure:
-                closures_by_seller[seller_user_id] = closure
-                continue
-
-            closure = closed_by_seller.get(seller_user_id)
-            if closure:
-                to_reopen |= closure
                 closures_by_seller[seller_user_id] = closure
                 continue
 
@@ -227,9 +254,6 @@ class SurpayCashClosure(models.Model):
                     "closure_date": day,
                 }
             )
-
-        if to_reopen:
-            to_reopen.write({"state": "draft"})
 
         if to_create:
             created = self.sudo().create(to_create)
@@ -265,17 +289,38 @@ class SurpayCashClosure(models.Model):
             txs.write({"cash_closure_id": rec.id})
 
     def action_close_cash(self):
+        self.ensure_one()
+        if self.state != "draft":
+            raise UserError(_("Este cierre ya esta cerrado."))
+        view = self.env.ref("surpay_base.view_surpay_cash_closure_transfer_confirm_wizard_form")
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Confirmar cierre de caja"),
+            "res_model": "surpay.cash.closure.transfer.confirm.wizard",
+            "view_mode": "form",
+            "view_id": view.id,
+            "target": "new",
+            "context": {
+                "default_closure_id": self.id,
+            },
+        }
+
+    def action_emergency_reopen_cash(self):
+        if not (self.env.user.has_group("surpay_base.group_surpay_manager") or self.env.user.has_group("base.group_system")):
+            raise UserError(_("No tiene permisos para ejecutar la reversa de emergencia."))
+
         for rec in self:
-            if rec.state != "draft":
-                raise UserError(_("Este cierre ya esta cerrado."))
-            if not rec.transaction_ids:
-                rec.action_load_transactions()
-            if not rec.transaction_ids:
-                raise UserError(_("No hay transacciones pagadas disponibles para cerrar en el rango seleccionado."))
-            pending = rec.transaction_ids.filtered(lambda t: not t.transferred)
-            if pending:
-                raise UserError(_("Hay transacciones pendientes sin marcar como transferidas. Marca cada detalle antes de cerrar la caja."))
-            rec.state = "closed"
+            if rec.state != "closed":
+                raise UserError(_("Solo se puede revertir un cierre en estado cerrado."))
+            if rec.reconciliation_state == "conciliated":
+                raise UserError(_("No se puede revertir un cierre ya conciliado."))
+            rec.transaction_ids.write({"transferred": False})
+            rec.write(
+                {
+                    "state": "draft",
+                    "transfer_proof_attachment_ids": [(5, 0, 0)],
+                }
+            )
 
     def action_open_report_wizard(self):
         self.ensure_one()
