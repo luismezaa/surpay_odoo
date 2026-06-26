@@ -320,6 +320,13 @@ class SurpayPaymentReconciliation(models.Model):
         return records
 
     def write(self, vals):
+        if "closure_ids" in vals:
+            started_records = self.filtered(lambda r: r.state != "draft")
+            if started_records:
+                raise UserError(
+                    _("No se pueden modificar los cierres incluidos cuando la conciliacion ya fue iniciada.")
+                )
+
         if "seller_user_id" in vals:
             for rec in self:
                 new_seller = vals.get("seller_user_id")
