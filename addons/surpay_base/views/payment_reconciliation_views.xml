@@ -138,7 +138,9 @@
                                     <field name="user_id" string="Usuario"/>
                                     <field name="message" string="Mensaje"/>
                                     <field name="note" string="Observacion"/>
-                                    <field name="attachment_ids" widget="many2many_tags" string="Adjuntos"/>
+                                    <field name="attachment_label" string="Adjuntos"/>
+                                    <field name="attachment_count" string="N° adjuntos"/>
+                                    <button name="action_download_attachments" type="object" string="Descargar adjuntos" class="btn-link" invisible="attachment_count == 0"/>
                                 </list>
                             </field>
                         </page>

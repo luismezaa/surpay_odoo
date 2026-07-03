@@ -192,6 +192,40 @@ class SurpayCashClosure(models.Model):
         return users.ids
 
     @api.model
+    def _prepare_pending_daily_closures(self, until_day=None, seller_user_ids=None):
+        day, _, end = self._day_window(until_day)
+
+        if seller_user_ids is None:
+            seller_user_ids = self._get_surpay_target_user_ids()
+        elif hasattr(seller_user_ids, "ids"):
+            seller_user_ids = seller_user_ids.ids
+
+        seller_user_ids = sorted({int(uid) for uid in (seller_user_ids or []) if uid})
+        if not seller_user_ids:
+            return
+
+        self.env.cr.execute(
+            """
+                SELECT DISTINCT DATE(create_date) AS closure_day
+                FROM surpay_payment_transaction
+                WHERE state = 'paid'
+                  AND transferred = FALSE
+                  AND cash_closure_id IS NULL
+                  AND seller_user_id = ANY(%s)
+                  AND create_date < %s
+                ORDER BY closure_day ASC
+            """,
+            [seller_user_ids, end],
+        )
+        pending_days = [row[0] for row in self.env.cr.fetchall() if row[0] and row[0] <= day]
+
+        for pending_day in pending_days:
+            self._prepare_daily_closures(
+                day_value=pending_day,
+                seller_user_ids=seller_user_ids,
+            )
+
+    @api.model
     def _prepare_daily_closures(self, day_value=None, seller_user_ids=None):
         day, start, end = self._day_window(day_value)
         tx_model = self.env["surpay.payment.transaction"].sudo()
@@ -270,13 +304,12 @@ class SurpayCashClosure(models.Model):
     @api.model
     def action_open_cash_closure(self):
         day = self.env.context.get("closure_date") or fields.Date.context_today(self)
-        self._prepare_daily_closures(day)
+        self._prepare_pending_daily_closures(day)
 
         action = self.env.ref("surpay_base.surpay_cash_closure_action").sudo().read()[0]
         action["context"] = {
             **self.env.context,
             "search_default_draft": 1,
-            "search_default_today": 1,
             "default_closure_date": day,
         }
         return action
