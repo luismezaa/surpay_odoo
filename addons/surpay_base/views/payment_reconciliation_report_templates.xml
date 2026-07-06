@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_surpay_payment_reconciliation" model="ir.actions.report">
+        <field name="name">Reporte de Conciliación</field>
+        <field name="model">surpay.payment.reconciliation</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">surpay_base.report_payment_reconciliation_document</field>
+        <field name="report_file">surpay_base.report_payment_reconciliation_document</field>
+        <field name="print_report_name">'Reporte de Conciliacion - %s' % (object.name or '')</field>
+    </record>
+
+    <template id="report_payment_reconciliation_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-set="report_data" t-value="doc._build_reconciliation_report_data()"/>
+
+                <t t-call="web.basic_layout">
+                    <div class="page">
+                        <div style="border-bottom: 2px solid #1f4e79; margin-bottom: 16px; padding-bottom: 10px;">
+                            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
+                                <img t-if="report_data['company_logo']"
+                                     t-att-src="'data:image/png;base64,' + report_data['company_logo']"
+                                     style="max-height: 64px; max-width: 160px; object-fit: contain;"/>
+                                <div>
+                                    <div style="font-size: 18px; font-weight: bold; color: #1f4e79;" t-esc="report_data['company_name']"/>
+                                    <div style="font-size: 15px; font-weight: 600; color: #2c5f8a; margin-top: 2px;">Reporte de Conciliación</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 12px; line-height: 1.7;">
+                                <strong>Conciliación:</strong>
+                                <span t-esc="report_data['reconciliation_name']"/>
+                                <span style="margin: 0 10px;">|</span>
+                                <strong>Estado:</strong>
+                                <span t-esc="report_data['reconciliation_state']"/>
+                                <br/>
+                                <strong>Vendedor:</strong>
+                                <span t-esc="report_data['seller_name']"/>
+                                <span style="margin: 0 10px;">|</span>
+                                <strong>Periodo:</strong>
+                                <span t-esc="report_data['period_display']"/>
+                                <br/>
+                                <strong>Cierres incluidos:</strong>
+                                <span t-esc="report_data['closure_names']"/>
+                                <br/>
+                                <strong>Generado por:</strong>
+                                <span t-esc="report_data['generated_by']"/>
+                                <span style="margin: 0 10px;">|</span>
+                                <strong>Generado el:</strong>
+                                <span t-esc="report_data['generated_at']"/>
+                            </div>
+                        </div>
+
+                        <table class="table table-sm o_main_table" style="width: 100%; margin-bottom: 18px; font-size: 12px;">
+                            <thead>
+                                <tr style="background-color: #dbe5f1;">
+                                    <th colspan="2">Resumen general y montos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Cantidad de cierres</td>
+                                    <td><span t-esc="report_data['closure_count']"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Transacciones consideradas</td>
+                                    <td><span t-esc="report_data['transaction_count']"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Monto transferido</td>
+                                    <td><span t-esc="report_data['total_to_transfer_amount_display']"/></td>
+                                </tr>
+                                <tr>
+                                    <td>Comisión conciliación</td>
+                                    <td>
+                                        <span t-esc="report_data['reconciliation_commission_amount_display']"/>
+                                        <span> (</span><span t-esc="report_data['reconciliation_commission_percent_display']"/><span>)</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Total factura esperada</strong></td>
+                                    <td><strong><span t-esc="report_data['total_invoice_expected_display']"/></strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
+
+                <t t-foreach="report_data['sections']" t-as="section">
+                    <t t-call="web.basic_layout">
+                        <div class="page">
+                            <div style="border-bottom: 2px solid #1f4e79; margin-bottom: 16px; padding-bottom: 10px;">
+                                <div style="font-size: 16px; font-weight: bold; color: #1f4e79;">Detalle por cierre</div>
+                                <div style="margin-top: 8px; font-size: 12px; line-height: 1.7;">
+                                    <strong>Cierre:</strong>
+                                    <span t-esc="section['closure_names']"/>
+                                    <span style="margin: 0 10px;">|</span>
+                                    <strong>Estado:</strong>
+                                    <span t-esc="section['closure_states']"/>
+                                    <br/>
+                                    <strong>Vendedor:</strong>
+                                    <span t-esc="section['user'].name"/>
+                                </div>
+                            </div>
+
+                            <table class="table table-sm o_main_table" style="width: 100%; margin-bottom: 18px; font-size: 12px;">
+                                <thead>
+                                    <tr style="background-color: #dbe5f1;">
+                                        <th colspan="2">Resumen del cierre</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Transacciones aprobadas</td>
+                                        <td><span t-esc="section['transaction_count']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Monto bruto procesado</td>
+                                        <td><span t-esc="section['gross_amount_display']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Comisión Surpay</td>
+                                        <td>
+                                            <span t-esc="section['commission_amount_display']"/>
+                                            <span> (</span><span t-esc="section['commission_percent_display']"/><span>)</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Monto neto a liquidar</td>
+                                        <td><span t-esc="section['net_amount_display']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total conciliado</strong></td>
+                                        <td><strong><span t-esc="section['financial_total_display']"/></strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <t t-if="section['transactions']">
+                                <div style="font-size: 14px; font-weight: 600; color: #1f1f1f; margin: 18px 0 8px 0;">Detalle de transacciones</div>
+                                <table class="table table-sm o_main_table" style="width: 100%; font-size: 11px;">
+                                    <thead>
+                                        <tr style="background-color: #dbe5f1;">
+                                            <th>Orden</th>
+                                            <th>Fecha / Hora</th>
+                                            <th>Monto</th>
+                                            <th>Estado</th>
+                                            <th>Concepto</th>
+                                            <th>Data extra</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="section['transactions']" t-as="line">
+                                            <td><span t-esc="line['order_id']"/></td>
+                                            <td><span t-esc="line['datetime']"/></td>
+                                            <td><span t-esc="line['amount_display']"/></td>
+                                            <td><span t-esc="line['state_label']"/></td>
+                                            <td><span t-esc="line['concept']"/></td>
+                                            <td><span t-esc="line['extra_data_pdf']"/></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </t>
+                            <t t-else="">
+                                <p>No se encontraron transacciones aprobadas para este cierre.</p>
+                            </t>
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

@@ -5,6 +5,7 @@ from . import commission_rule
 from . import payment_transaction
 from . import payment_event
 from . import cash_closure
+from . import cash_closure_report_service
 from . import payment_reconciliation
 from . import payment_reconciliation_log
 from . import ir_ui_menu

@@ -2,9 +2,6 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 import base64
 import io
-import json
-import pytz
-from collections import OrderedDict
 
 
 class SurpayCashClosureReportWizard(models.TransientModel):
@@ -91,219 +88,16 @@ class SurpayCashClosureReportWizard(models.TransientModel):
             return self.user_ids
         return self.env.user
 
-    def _format_amount(self, amount):
-        return "${}".format("{:,.0f}".format(amount or 0).replace(",", "."))
-
-    def _format_datetime(self, value):
-        if not value:
-            return ""
-        localized = fields.Datetime.context_timestamp(self, value)
-        return localized.strftime("%d-%m-%Y %H:%M")
-
-    @staticmethod
-    def _safe_text(value):
-        if value is None:
-            return ""
-        return str(value).strip()
-
-    @staticmethod
-    def _truncate_text(text, max_len=24):
-        value = SurpayCashClosureReportWizard._safe_text(text)
-        if len(value) <= max_len:
-            return value
-        return f"{value[:max_len - 3]}..."
-
-    def _extract_extra_data_fields(self, provider_raw):
-        payload = provider_raw
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except Exception:
-                return []
-
-        if not isinstance(payload, dict):
-            return []
-
-        extra_data = payload.get("extra_data")
-        if not isinstance(extra_data, dict):
-            return []
-
-        fields_list = extra_data.get("extra_data_fields")
-        if not isinstance(fields_list, list):
-            return []
-
-        normalized = []
-        for item in fields_list:
-            if not isinstance(item, dict):
-                continue
-            title = self._safe_text(item.get("title"))
-            value = self._safe_text(item.get("value"))
-            if not title or not value:
-                continue
-            normalized.append({"title": title, "value": value})
-
-        return normalized
-
-    def _format_extra_data_pdf(self, provider_raw):
-        fields_list = self._extract_extra_data_fields(provider_raw)
-        if not fields_list:
-            return ""
-
-        if len(fields_list) == 1:
-            item = fields_list[0]
-            return f"{item['title']}: {item['value']}"
-
-        visible_items = fields_list[:2]
-        parts = [
-            f"{item['title']}: {self._truncate_text(item['value'], 20)}"
-            for item in visible_items
-        ]
-        hidden = len(fields_list) - len(visible_items)
-        if hidden > 0:
-            parts.append(f"+{hidden} mas")
-        return " | ".join(parts)
-
-    def _format_extra_data_excel(self, provider_raw):
-        fields_list = self._extract_extra_data_fields(provider_raw)
-        if not fields_list:
-            return ""
-        return " | ".join([f"{item['title']}: {item['value']}" for item in fields_list])
+    def _report_service(self):
+        return self.env["surpay.cash.closure.report.service"]
 
     def _build_sections_sql(self, users):
-        """
-        Construye todas las secciones del reporte en una sola query SQL
-        que hace JOIN entre cierres y transacciones para todos los usuarios
-        al mismo tiempo. Evita el N+1 del ORM y filtra/ordena en BD.
-        """
         self.ensure_one()
-        if not users:
-            return []
-
-        user_ids = users.ids
-
-        # Labels de estado construidos una sola vez, fuera de cualquier loop
-        closure_model = self.env["surpay.cash.closure"]
-        tx_model = self.env["surpay.payment.transaction"]
-        closure_state_labels = dict(closure_model._fields["state"].selection)
-        tx_state_labels = dict(tx_model._fields["state"].selection)
-        paid_label = tx_state_labels.get("paid", "Pagado")
-
-        # Zona horaria del usuario, calculada una sola vez
-        tz_name = self.env.user.tz or "UTC"
-        user_tz = pytz.timezone(tz_name)
-        utc_tz = pytz.utc
-
-        # Una sola query: todos los cierres + transacciones pagadas del dia para todos los usuarios
-        self.env.cr.execute("""
-            SELECT
-                sc.id                                        AS closure_id,
-                sc.name                                      AS closure_name,
-                sc.state                                     AS closure_state,
-                sc.seller_user_id,
-                st.id                                        AS tx_id,
-                st.order_id,
-                COALESCE(st.create_date, st.write_date)      AS tx_date,
-                COALESCE(st.amount, 0)                       AS amount,
-                COALESCE(st.base_amount, 0)                  AS base_amount,
-                COALESCE(st.commission_amount, 0)            AS commission_amount,
-                st.concept,
-                st.provider_raw
-            FROM surpay_cash_closure sc
-            LEFT JOIN surpay_payment_transaction st
-                ON st.cash_closure_id = sc.id
-                AND st.state = 'paid'
-            WHERE sc.closure_date = %s
-              AND sc.seller_user_id = ANY(%s)
-            ORDER BY sc.seller_user_id, sc.id,
-                     COALESCE(st.create_date, st.write_date) NULLS LAST,
-                     st.id NULLS LAST
-        """, [self.report_date, user_ids])
-        rows = self.env.cr.fetchall()
-        col_names = [d[0] for d in self.env.cr.description]
-
-        # Agrupar filas por usuario -> cierre
-        user_data = {uid: OrderedDict() for uid in user_ids}
-
-        for row in rows:
-            r = dict(zip(col_names, row))
-            uid = r["seller_user_id"]
-            cid = r["closure_id"]
-            if cid not in user_data[uid]:
-                user_data[uid][cid] = {
-                    "name": r["closure_name"] or "",
-                    "state": r["closure_state"] or "",
-                    "txs": [],
-                }
-            if r["tx_id"]:
-                tx_date = r["tx_date"]
-                if tx_date is not None:
-                    if tx_date.tzinfo is None:
-                        tx_date = utc_tz.localize(tx_date)
-                    tx_date_str = tx_date.astimezone(user_tz).strftime("%d-%m-%Y %H:%M")
-                else:
-                    tx_date_str = ""
-                user_data[uid][cid]["txs"].append({
-                    "order_id": r["order_id"] or "",
-                    "datetime": tx_date_str,
-                    "amount": r["amount"],
-                    "base_amount": r["base_amount"],
-                    "commission_amount": r["commission_amount"],
-                    "concept": r["concept"] or "",
-                    "provider_raw": r["provider_raw"],
-                })
-
-        # Construir secciones manteniendo el orden de `users`
-        sections = []
-        for user in users:
-            uid = user.id
-            closures_data = user_data.get(uid, {})
-
-            closure_names = ", ".join(c["name"] for c in closures_data.values())
-            closure_states_set = {
-                closure_state_labels.get(c["state"], c["state"])
-                for c in closures_data.values()
-            }
-            closure_states = ", ".join(sorted(closure_states_set)) or _("Sin cierres")
-
-            all_txs = []
-            for c in closures_data.values():
-                all_txs.extend(c["txs"])
-
-            gross_amount = sum(t["amount"] for t in all_txs)
-            net_amount = sum(t["base_amount"] for t in all_txs)
-            commission_amount = sum(t["commission_amount"] for t in all_txs)
-            reconciled_amount = gross_amount - commission_amount
-            commission_percent = (commission_amount / net_amount * 100.0) if net_amount else 0.0
-
-            transaction_lines = [
-                {
-                    "order_id": t["order_id"],
-                    "datetime": t["datetime"],
-                    "amount_display": self._format_amount(t["amount"]),
-                    "state_label": paid_label,
-                    "concept": t["concept"],
-                    "extra_data_pdf": self._format_extra_data_pdf(t["provider_raw"]),
-                    "extra_data_excel": self._format_extra_data_excel(t["provider_raw"]),
-                }
-                for t in all_txs
-            ]
-
-            sections.append({
-                "user": user,
-                "closure_count": len(closures_data),
-                "closure_names": closure_names,
-                "closure_states": closure_states,
-                "transaction_count": len(all_txs),
-                "gross_amount_display": self._format_amount(gross_amount),
-                "commission_percent_display": "{:.2f}%".format(commission_percent),
-                "commission_amount_display": self._format_amount(commission_amount),
-                "net_amount_display": self._format_amount(net_amount),
-                "financial_total_display": self._format_amount(reconciled_amount),
-                "transactions": transaction_lines,
-                "has_data": bool(closures_data),
-            })
-
-        return sections
+        return self._report_service()._build_cash_closure_sections(
+            report_date=self.report_date,
+            users=users,
+            group_mode="user",
+        )
 
     def _format_date(self, date_value):
         if not date_value:
@@ -312,6 +106,9 @@ class SurpayCashClosureReportWizard(models.TransientModel):
         lang = self.env["res.lang"]._lang_get(lang_code)
         date_format = lang.date_format if lang else "%d/%m/%Y"
         return date_value.strftime(date_format)
+
+    def _format_datetime(self, value):
+        return self._report_service()._format_datetime(value)
 
     def _ensure_daily_closures(self, users):
         self.ensure_one()
@@ -330,7 +127,7 @@ class SurpayCashClosureReportWizard(models.TransientModel):
         return {
             "report_date": fields.Date.to_string(self.report_date),
             "report_date_display": self._format_date(self.report_date),
-            "generated_at": self._format_datetime(fields.Datetime.now()),
+            "generated_at": self._report_service()._format_datetime(fields.Datetime.now()),
             "generated_by": self.env.user.name,
             "company_name": company.name,
             "company_logo": logo_b64,

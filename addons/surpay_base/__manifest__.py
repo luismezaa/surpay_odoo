@@ -17,6 +17,7 @@
         "views/payment_transaction_views.xml",
         "views/cash_closure_views.xml",
         "views/payment_reconciliation_views.xml",
+        "views/payment_reconciliation_report_templates.xml",
         "views/payment_reconciliation_event_wizard_views.xml",
         "views/cash_closure_transfer_confirm_wizard_views.xml",
         "views/cash_closure_report_wizard_views.xml",

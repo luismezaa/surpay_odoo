@@ -250,6 +250,254 @@ class SurpayPaymentReconciliation(models.Model):
             "target": "self",
         }
 
+    def _report_service(self):
+        return self.env["surpay.cash.closure.report.service"]
+
+    def _format_date(self, date_value):
+        if not date_value:
+            return ""
+        lang_code = self.env.user.lang or self.env.context.get("lang") or "es_CL"
+        lang = self.env["res.lang"]._lang_get(lang_code)
+        date_format = lang.date_format if lang else "%d/%m/%Y"
+        return date_value.strftime(date_format)
+
+    def _build_reconciliation_report_data(self):
+        self.ensure_one()
+        if not self.closure_ids:
+            raise UserError(_("Debes seleccionar al menos un cierre para descargar el reporte de conciliacion."))
+
+        sections = self._report_service()._build_cash_closure_sections(
+            closure_ids=self.closure_ids,
+            group_mode="closure",
+        )
+
+        closure_names = ", ".join(self.closure_ids.mapped("name"))
+        company = self.env.company
+        logo_b64 = company.logo.decode("utf-8") if company.logo else None
+
+        return {
+            "company_name": company.name,
+            "company_logo": logo_b64,
+            "generated_at": self._report_service()._format_datetime(fields.Datetime.now()),
+            "generated_by": self.env.user.name,
+            "reconciliation_name": self.name,
+            "reconciliation_state": dict(self._fields["state"].selection).get(self.state, self.state),
+            "seller_name": self.seller_user_id.name or "-",
+            "period_display": self.period_label
+            or _("Del %s al %s")
+            % (self._format_date(self.date_from), self._format_date(self.date_to)),
+            "closure_names": closure_names,
+            "closure_count": len(self.closure_ids),
+            "transaction_count": sum(section["transaction_count"] for section in sections),
+            "total_to_transfer_amount_display": self._report_service()._format_amount(self.total_to_transfer_amount),
+            "reconciliation_commission_percent_display": "{:.2f}%".format(self.reconciliation_commission_percent or 0.0),
+            "reconciliation_commission_amount_display": self._report_service()._format_amount(self.reconciliation_commission_amount),
+            "total_invoice_expected_display": self._report_service()._format_amount(self.total_invoice_expected),
+            "sections": sections,
+            "has_data": bool(sections),
+        }
+
+    def action_download_reconciliation_report_pdf(self):
+        self.ensure_one()
+        report_data = self._build_reconciliation_report_data()
+        if not report_data["has_data"]:
+            raise UserError(_("No hay informacion disponible para generar el reporte de conciliacion."))
+        action = self.env.ref("surpay_base.action_report_surpay_payment_reconciliation").report_action(self)
+        action["close_on_report_download"] = True
+        return action
+
+    def action_download_reconciliation_report_excel(self):
+        self.ensure_one()
+        try:
+            import openpyxl
+            from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        except ImportError:
+            raise UserError(_("La librería openpyxl no está instalada en el servidor."))
+
+        report_data = self._build_reconciliation_report_data()
+        if not report_data["has_data"]:
+            raise UserError(_("No hay informacion disponible para generar el reporte de conciliacion."))
+
+        BLUE_FILL = PatternFill("solid", fgColor="1F4E79")
+        LIGHTBLUE_FILL = PatternFill("solid", fgColor="DBE5F1")
+        HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
+        SUBHEADER_FONT = Font(bold=True, size=10)
+        BOLD = Font(bold=True)
+        CENTER = Alignment(horizontal="center")
+        THIN = Side(style="thin", color="BBBBBB")
+        CELL_BORDER = Border(left=THIN, right=THIN, bottom=THIN)
+
+        wb = openpyxl.Workbook()
+        ws_summary = wb.active
+        ws_summary.title = "Resumen"
+        ws_summary.column_dimensions["A"].width = 40
+        ws_summary.column_dimensions["B"].width = 48
+
+        used_sheet_names = {"Resumen"}
+
+        def _safe_sheet_title(raw_name, fallback_index):
+            invalid_chars = set('[]:*?/\\')
+            cleaned = "".join("-" if ch in invalid_chars else ch for ch in (raw_name or ""))
+            cleaned = (cleaned or "").strip()
+            if not cleaned:
+                cleaned = f"Cierre {fallback_index}"
+            cleaned = cleaned[:31]
+            if not cleaned:
+                cleaned = f"Cierre {fallback_index}"[:31]
+
+            candidate = cleaned
+            suffix = 2
+            while candidate in used_sheet_names:
+                base = cleaned[: max(0, 31 - len(f"_{suffix}"))]
+                candidate = f"{base}_{suffix}"
+                suffix += 1
+
+            used_sheet_names.add(candidate)
+            return candidate
+
+        row = 1
+        ws_summary.merge_cells(f"A{row}:B{row}")
+        ws_summary[f"A{row}"] = report_data["company_name"]
+        ws_summary[f"A{row}"].font = Font(bold=True, size=14, color="1F4E79")
+        row += 1
+
+        ws_summary.merge_cells(f"A{row}:B{row}")
+        ws_summary[f"A{row}"] = "Reporte de Conciliación"
+        ws_summary[f"A{row}"].font = Font(bold=True, size=12)
+        row += 2
+
+        metadata_rows = [
+            ("Conciliación:", report_data["reconciliation_name"]),
+            ("Estado:", report_data["reconciliation_state"]),
+            ("Vendedor:", report_data["seller_name"]),
+            ("Periodo:", report_data["period_display"]),
+            ("Cierres incluidos:", report_data["closure_names"]),
+            ("Generado por:", report_data["generated_by"]),
+            ("Generado el:", report_data["generated_at"]),
+        ]
+        for label, value in metadata_rows:
+            ws_summary[f"A{row}"] = label
+            ws_summary[f"A{row}"].font = BOLD
+            ws_summary[f"B{row}"] = value
+            row += 1
+
+        row += 1
+        ws_summary.merge_cells(f"A{row}:B{row}")
+        ws_summary[f"A{row}"] = "Montos de conciliación"
+        ws_summary[f"A{row}"].font = HEADER_FONT
+        ws_summary[f"A{row}"].fill = BLUE_FILL
+        ws_summary[f"A{row}"].alignment = CENTER
+        row += 1
+
+        summary_rows = [
+            ("Cantidad de cierres", report_data["closure_count"]),
+            ("Transacciones consideradas", report_data["transaction_count"]),
+            ("Monto transferido", report_data["total_to_transfer_amount_display"]),
+            (
+                "Comisión conciliación",
+                f"{report_data['reconciliation_commission_amount_display']} ({report_data['reconciliation_commission_percent_display']})",
+            ),
+            ("Total factura esperada", report_data["total_invoice_expected_display"]),
+        ]
+        for label, value in summary_rows:
+            ws_summary[f"A{row}"] = label
+            ws_summary[f"B{row}"] = str(value)
+            ws_summary[f"A{row}"].border = CELL_BORDER
+            ws_summary[f"B{row}"].border = CELL_BORDER
+            row += 1
+
+        for index, section in enumerate(report_data["sections"], start=1):
+            closure_name = section["closure_names"] or f"Cierre {index}"
+            sheet_name = _safe_sheet_title(f"{index:02d}-{closure_name}", index)
+            ws = wb.create_sheet(title=sheet_name)
+            ws.column_dimensions["A"].width = 30
+            ws.column_dimensions["B"].width = 22
+            ws.column_dimensions["C"].width = 16
+            ws.column_dimensions["D"].width = 14
+            ws.column_dimensions["E"].width = 30
+            ws.column_dimensions["F"].width = 46
+
+            row = 1
+            ws.merge_cells(f"A{row}:F{row}")
+            ws[f"A{row}"] = f"Cierre: {closure_name}"
+            ws[f"A{row}"].font = Font(bold=True, size=12, color="1F4E79")
+            row += 2
+
+            ws[f"A{row}"] = "Vendedor:"
+            ws[f"A{row}"].font = BOLD
+            ws[f"B{row}"] = section["user"].name
+            row += 1
+            ws[f"A{row}"] = "Estado del cierre:"
+            ws[f"A{row}"].font = BOLD
+            ws[f"B{row}"] = section["closure_states"]
+            row += 2
+
+            ws.merge_cells(f"A{row}:B{row}")
+            ws[f"A{row}"] = "Resumen del cierre"
+            ws[f"A{row}"].font = HEADER_FONT
+            ws[f"A{row}"].fill = BLUE_FILL
+            ws[f"A{row}"].alignment = CENTER
+            row += 1
+
+            closure_summary_rows = [
+                ("Transacciones aprobadas", section["transaction_count"]),
+                ("Monto bruto procesado", section["gross_amount_display"]),
+                ("Comisión Surpay", f"{section['commission_amount_display']} ({section['commission_percent_display']})"),
+                ("Monto neto a liquidar", section["net_amount_display"]),
+                ("Total conciliado", section["financial_total_display"]),
+            ]
+            for label, value in closure_summary_rows:
+                ws[f"A{row}"] = label
+                ws[f"B{row}"] = str(value)
+                ws[f"A{row}"].border = CELL_BORDER
+                ws[f"B{row}"].border = CELL_BORDER
+                row += 1
+
+            row += 1
+            headers = ["Orden", "Fecha / Hora", "Monto", "Estado", "Concepto", "Data extra"]
+            cols = ["A", "B", "C", "D", "E", "F"]
+            for col, header in zip(cols, headers):
+                ws[f"{col}{row}"] = header
+                ws[f"{col}{row}"].font = SUBHEADER_FONT
+                ws[f"{col}{row}"].fill = LIGHTBLUE_FILL
+                ws[f"{col}{row}"].border = CELL_BORDER
+            row += 1
+
+            for line in section["transactions"]:
+                values = [
+                    line["order_id"],
+                    line["datetime"],
+                    line["amount_display"],
+                    line["state_label"],
+                    line["concept"],
+                    line["extra_data_excel"],
+                ]
+                for col, value in zip(cols, values):
+                    ws[f"{col}{row}"] = value
+                    ws[f"{col}{row}"].border = CELL_BORDER
+                row += 1
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = "Reporte_Conciliacion_{}.xlsx".format(self.name or self.id)
+        attachment = self.env["ir.attachment"].sudo().create(
+            {
+                "name": filename,
+                "type": "binary",
+                "datas": base64.b64encode(output.read()).decode("utf-8"),
+                "res_model": self._name,
+                "res_id": self.id,
+                "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            }
+        )
+        return {
+            "type": "ir.actions.act_url",
+            "url": "/web/content/{}?download=true".format(attachment.id),
+            "target": "new",
+        }
+
     def _get_commission_scope_values(self):
         self.ensure_one()
         txs = self.closure_ids.mapped("transaction_ids")
