@@ -10,8 +10,8 @@
                 <field name="proof_document_name" string="Comprobante"/>
                 <field name="closure_proof_count" string="N° comprobantes"/>
                 <button name="action_open_closure_proofs" type="object" string="Descargar comprobantes" class="btn-link" invisible="closure_proof_count == 0"/>
-                <button name="action_download_reconciliation_report_pdf" type="object" string="Descargar Reporte de Conciliación" class="btn-link"/>
-                <button name="action_download_reconciliation_report_excel" type="object" string="Exportar Reporte Excel" class="btn-link"/>
+                <button name="action_download_reconciliation_report_pdf" type="object" string="Reporte de Conciliación PDF" class="btn-link"/>
+                <button name="action_download_reconciliation_report_excel" type="object" string="Reporte de Conciliación Excel" class="btn-link"/>
                 <field name="total_to_transfer_amount" string="Monto transferido"/>
                 <field name="seller_user_id"/>
                 <field name="state"/>
