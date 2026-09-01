@@ -305,5 +305,9 @@ class DepayApiService(models.AbstractModel):
         return hmac.compare_digest(digest, signature_header)
 
     @staticmethod
+    def should_validate_callback_signature():
+        return True
+
+    @staticmethod
     def dump_json(payload):
         return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)

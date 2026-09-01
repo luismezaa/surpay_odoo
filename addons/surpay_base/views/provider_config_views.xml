@@ -49,15 +49,20 @@
                     </group>
 
                     <notebook>
-                        <!-- Depay Specific Credentials -->
+                        <!-- Provider credentials -->
                         <page string="Credenciales" name="credentials">
-                            <group>
-                                <field name="api_key" password="True" help="API Key del proveedor (guardada cifrada)" />
+                            <group string="Credenciales comunes">
+                                <field name="api_key" password="True" help="API Key del proveedor (guardada cifrada)" invisible="provider == 'kushki'" />
+                                <field name="base_url" password="True" help="URL base del API (guardada cifrada)" />
+                                <field name="webhook_url" help="URL webhook para recibir callbacks del proveedor" />
+                            </group>
+                            <group string="Credenciales Depay" invisible="provider != 'depay'">
                                 <field name="customer_uuid" password="True" help="Customer UUID del proveedor (guardado cifrado)" />
                                 <field name="pos_id" password="True" help="ID de punto de venta (guardado cifrado)" />
                                 <field name="webhook_secret" password="True" help="Secreto webhook (guardado cifrado)" />
-                                <field name="base_url" password="True" help="URL base del API (guardada cifrada)" />
-                                <field name="webhook_url" help="URL webhook para recibir callbacks del proveedor" />
+                            </group>
+                            <group string="Credenciales Kushki" invisible="provider != 'kushki'">
+                                <field name="business_code" password="True" help="Business Code de Kushki (guardado cifrado)" />
                             </group>
                         </page>
 

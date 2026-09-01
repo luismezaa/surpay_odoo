@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="param_surpay_payment_intent_default_expiration_seconds" model="ir.config_parameter">
+        <field name="key">surpay_base.payment_intent_default_expiration_seconds</field>
+        <field name="value">900</field>
+    </record>
+</odoo>

@@ -216,7 +216,16 @@
                             <img id="qrcode-fallback" alt="QR de pago" />
                             <p class="qr-hint">Escanea este codigo QR con tu app para completar el pago.</p>
                         </div>
-                        <div class="qr-box" t-if="not qr_data">
+                        <div class="qr-box" t-if="not qr_data and provider == 'kushki'">
+                            <p class="qr-hint" style="margin:0;">Transaccion enviada al terminal POS.</p>
+                            <p class="qr-hint" style="margin-top:8px;" t-if="provider_terminal_serial">
+                                Terminal: <t t-esc="provider_terminal_serial" />
+                            </p>
+                            <p class="qr-hint" style="margin-top:8px;" t-if="provider_status">
+                                Estado proveedor: <t t-esc="provider_status" />
+                            </p>
+                        </div>
+                        <div class="qr-box" t-if="not qr_data and provider != 'kushki'">
                             <p class="qr-hint" style="margin:0;">El QR aun no esta disponible.</p>
                         </div>
 

@@ -16,6 +16,16 @@ class SurpayPaymentTransaction(models.Model):
     provider = fields.Char(string="Proveedor", required=True, index=True)
     provider_config_id = fields.Many2one("surpay.provider.config", string="Config. proveedor", index=True, ondelete="set null")
     provider_payment_id = fields.Char(string="ID pago proveedor", index=True)
+    provider_client_transaction_id = fields.Char(
+        string="ID transacción proveedor",
+        index=True,
+        help="Identificador idempotente de la transacción en el proveedor.",
+    )
+    provider_terminal_serial = fields.Char(
+        string="Serial terminal proveedor",
+        index=True,
+        help="Serial de terminal utilizado por el proveedor en la transacción.",
+    )
     state = fields.Selection(
         string="Estado",
         selection=[

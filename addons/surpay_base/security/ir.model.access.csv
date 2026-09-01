@@ -6,6 +6,7 @@ access_surpay_provider_config_system,surpay.provider.config system,model_surpay_
 access_surpay_provider_config_user,surpay.provider.config user,model_surpay_provider_config,surpay_base.group_surpay_manager,1,1,1,0
 access_surpay_commission_rule_system,surpay.commission.rule system,model_surpay_commission_rule,base.group_system,1,1,1,1
 access_surpay_commission_rule_user,surpay.commission.rule user,model_surpay_commission_rule,surpay_base.group_surpay_manager,1,1,1,0
+access_surpay_payment_intent_system,surpay.payment.intent system,model_surpay_payment_intent,base.group_system,1,1,1,1
 access_surpay_payment_transaction_system,surpay.payment.transaction system,model_surpay_payment_transaction,base.group_system,1,1,1,1
 access_surpay_payment_transaction_user,surpay.payment.transaction user,model_surpay_payment_transaction,base.group_user,1,0,0,0
 access_surpay_payment_transaction_manager,surpay.payment.transaction manager,model_surpay_payment_transaction,surpay_base.group_surpay_manager,1,1,0,0

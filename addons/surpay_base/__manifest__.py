@@ -9,6 +9,7 @@
     "data": [
         "security/surpay_groups.xml",
         "security/ir.model.access.csv",
+        "data/ir_config_parameter_data.xml",
         "data/ir_cron_data.xml",
         "data/ir_sequence_data.xml",
         "views/provider_config_views.xml",

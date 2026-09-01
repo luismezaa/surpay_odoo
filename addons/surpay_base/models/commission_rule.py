@@ -13,7 +13,7 @@ class SurpayCommissionRule(models.Model):
     active = fields.Boolean(string="Activa", default=True)
     sequence = fields.Integer(string="Prioridad", default=10, help="Menor valor = mayor prioridad.")
     provider = fields.Selection(
-        selection=[("depay", "Depay"), ("klap", "Klap")],
+        selection=[("depay", "Depay"), ("klap", "Klap"), ("kushki", "Kushki")],
         string="Proveedor",
         required=True,
         index=True,

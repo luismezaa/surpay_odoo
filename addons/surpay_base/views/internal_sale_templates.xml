@@ -231,6 +231,8 @@
                                             type="radio"
                                             name="provider_config_id"
                                             t-att-value="cfg.id"
+                                            t-att-data-provider="cfg.provider"
+                                            t-att-data-config-id="cfg.id"
                                             t-att-checked="cfg.id == default_provider_config_id and 'checked' or None"
                                         />
                                         <div class="provider-card-body">
@@ -246,7 +248,14 @@
                             </div>
                         </div>
 
-                        <div class="field">
+                        <div class="field" id="kushkiTerminalField" style="display:none;">
+                            <label for="terminal_id">Terminal Kushki</label>
+                            <select id="terminal_id">
+                                <option value="">Selecciona una terminal</option>
+                            </select>
+                        </div>
+
+                        <div class="field" id="qrFromField">
                             <label for="qr_from">Pais origen</label>
                             <select id="qr_from">
                                 <t t-foreach="qr_from_options" t-as="opt">
@@ -262,17 +271,94 @@
                             <a class="secondary" t-att-href="odoo_return_url">Volver</a>
                         </div>
                         <div id="msg" class="msg"></div>
+                        <div id="kushkiTerminalsData" t-att-data-json="kushki_terminals_by_config_json" style="display:none"></div>
                     </div>
                 </div>
 
                 <script type="text/javascript">
+                    <![CDATA[
+                    var kushkiTerminalsByConfig = {};
+                    var kushkiTerminalsData = document.getElementById("kushkiTerminalsData");
+                    if (kushkiTerminalsData) {
+                        try {
+                            kushkiTerminalsByConfig = JSON.parse(kushkiTerminalsData.getAttribute("data-json") || "{}");
+                        } catch (error) {
+                            kushkiTerminalsByConfig = {};
+                        }
+                    }
+                    ]]>
+                </script>
+                <script type="text/javascript">
+                    <![CDATA[
                     (function () {
                         var submitBtn = document.getElementById("submitBtn");
                         var msg = document.getElementById("msg");
+                        var kushkiTerminalField = document.getElementById("kushkiTerminalField");
+                        var kushkiTerminalSelect = document.getElementById("terminal_id");
+                        var kushkiCountryField = document.getElementById("qrFromField");
 
                         function getVal(id) {
                             var el = document.getElementById(id);
                             return el ? el.value : "";
+                        }
+
+                        function getSelectedProviderRadio() {
+                            return document.querySelector('input[name="provider_config_id"]:checked');
+                        }
+
+                        function getSelectedProviderInfo() {
+                            var radio = getSelectedProviderRadio();
+                            if (!radio) {
+                                return null;
+                            }
+                            return {
+                                id: parseInt(radio.value, 10),
+                                provider: radio.getAttribute("data-provider") || "",
+                                configId: radio.getAttribute("data-config-id") || radio.value,
+                            };
+                        }
+
+                        function escapeHtml(value) {
+                            return String(value || "")
+                                .replace(/&/g, "&amp;")
+                                .replace(/</g, "&lt;")
+                                .replace(/>/g, "&gt;")
+                                .replaceAll('"', "&quot;")
+                                .replace(/'/g, "&#39;");
+                        }
+
+                        function renderKushkiTerminals(configId) {
+                            if (!kushkiTerminalSelect) {
+                                return;
+                            }
+                            var terminals = kushkiTerminalsByConfig && kushkiTerminalsByConfig[String(configId)] ? kushkiTerminalsByConfig[String(configId)] : [];
+                            var html = ['<option value="">Selecciona una terminal</option>'];
+                            terminals.forEach(function (terminal) {
+                                var label = terminal && terminal.label ? String(terminal.label) : String(terminal.terminal_serial || terminal.id || "");
+                                html.push('<option value="' + String(terminal.id) + '">' + escapeHtml(label) + '</option>');
+                            });
+                            kushkiTerminalSelect.innerHTML = html.join("");
+                        }
+
+                        function toggleKushkiTerminalSelector() {
+                            var info = getSelectedProviderInfo();
+                            if (!kushkiTerminalField || !kushkiTerminalSelect) {
+                                return;
+                            }
+                            if (info && info.provider === "kushki") {
+                                renderKushkiTerminals(info.id);
+                                kushkiTerminalField.style.display = "block";
+                                if (kushkiCountryField) {
+                                    kushkiCountryField.style.display = "none";
+                                }
+                                return;
+                            }
+                            kushkiTerminalField.style.display = "none";
+                            kushkiTerminalSelect.value = "";
+                            kushkiTerminalSelect.innerHTML = '<option value="">Selecciona una terminal</option>';
+                            if (kushkiCountryField) {
+                                kushkiCountryField.style.display = "block";
+                            }
                         }
 
                         function setMessage(text) {
@@ -284,9 +370,11 @@
                             var amount = parseFloat(getVal("amount_clp") || "0");
                             var concept = (getVal("concept") || "").trim();
                             var email = (getVal("email") || "").trim();
+                            var providerInfo = getSelectedProviderInfo();
+                            var opensPaymentTab = !providerInfo || providerInfo.provider !== "kushki";
+                            var providerConfigId = providerInfo ? providerInfo.id : 0;
                             var qrFrom = (getVal("qr_from") || "").toUpperCase().trim();
-                            var providerRadio = document.querySelector('input[name="provider_config_id"]:checked');
-                            var providerConfigId = providerRadio ? parseInt(providerRadio.value, 10) : 0;
+                            var terminalId = kushkiTerminalSelect ? (kushkiTerminalSelect.value || "").trim() : "";
 
                             if (!(amount > 0)) {
                                 setMessage("Ingresa un precio válido en pesos.");
@@ -300,12 +388,16 @@
                                 setMessage("Selecciona una plataforma de pago.");
                                 return;
                             }
-                            if (!qrFrom) {
+                            if (providerInfo && providerInfo.provider !== "kushki" && !qrFrom) {
                                 setMessage("Selecciona un pais para origen QR.");
                                 return;
                             }
+                            if (providerInfo && providerInfo.provider === "kushki" && !terminalId) {
+                                setMessage("Selecciona una terminal Kushki.");
+                                return;
+                            }
 
-                            var paymentTab = window.open("about:blank", "_blank");
+                            var paymentTab = opensPaymentTab ? window.open("about:blank", "_blank") : null;
                             submitBtn.disabled = true;
                             submitBtn.textContent = "Procesando...";
 
@@ -317,15 +409,16 @@
                                     concept: concept,
                                     email: email,
                                     provider_config_id: providerConfigId,
-                                    qr_from: qrFrom,
+                                    qr_from: providerInfo && providerInfo.provider === "kushki" ? "" : qrFrom,
+                                    terminal_id: terminalId,
                                 }),
                             })
                                 .then(function (res) { return res.json(); })
                                 .then(function (payload) {
-                                    var result = payload &amp;&amp; payload.result ? payload.result : payload;
+                                    var result = payload && payload.result ? payload.result : payload;
                                     if (!result || result.error) {
-                                        var errorMessage = (result &amp;&amp; result.error &amp;&amp; result.error.message) || "No fue posible iniciar el pago.";
-                                        if (paymentTab &amp;&amp; !paymentTab.closed) {
+                                        var errorMessage = (result && result.error && result.error.message) || "No fue posible iniciar el pago.";
+                                        if (paymentTab && !paymentTab.closed) {
                                             paymentTab.close();
                                         }
                                         setMessage(errorMessage);
@@ -334,16 +427,16 @@
                                         return;
                                     }
 
-                                    if (paymentTab &amp;&amp; !paymentTab.closed) {
+                                    if (opensPaymentTab && paymentTab && !paymentTab.closed) {
                                         paymentTab.location.href = result.payment_url;
-                                    } else {
+                                    } else if (opensPaymentTab) {
                                         window.open(result.payment_url, "_blank");
                                     }
 
                                     window.location.href = result.processing_url;
                                 })
                                 .catch(function () {
-                                    if (paymentTab &amp;&amp; !paymentTab.closed) {
+                                    if (paymentTab && !paymentTab.closed) {
                                         paymentTab.close();
                                     }
                                     setMessage("Error de conexión al iniciar el pago.");
@@ -352,8 +445,18 @@
                                 });
                         }
 
+                        document.querySelectorAll('input[name="provider_config_id"]').forEach(function (radio) {
+                            radio.addEventListener("change", toggleKushkiTerminalSelector);
+                        });
+
+                        toggleKushkiTerminalSelector();
+                        if (kushkiCountryField) {
+                            var initialProvider = getSelectedProviderInfo();
+                            kushkiCountryField.style.display = initialProvider && initialProvider.provider === "kushki" ? "none" : "block";
+                        }
                         submitBtn.addEventListener("click", startPayment);
                     })();
+                    ]]>
                 </script>
             </body>
         </html>
@@ -406,15 +509,17 @@
                 </style>
             </head>
             <body>
-                <div class="box" t-att-data-order-id="order_id">
+                <div class="box" t-att-data-order-id="order_id" t-att-data-provider="provider">
                     <div class="spinner"></div>
                     <h1>Procesando pago</h1>
-                    <p class="hint">El pago se abrió en otra pestaña. Espera confirmación para continuar.</p>
+                    <p class="hint" t-if="provider == 'kushki'">La terminal Kushki esta procesando el pago. Espera confirmación para continuar.</p>
+                    <p class="hint" t-else="">El pago se abrió en otra pestaña. Espera confirmación para continuar.</p>
                     <p class="state">Estado actual: <span id="stateLabel"><t t-esc="state"/></span></p>
                     <p class="hint">Concepto: <t t-esc="concept or '-'"/> | Monto: <t t-esc="amount"/> <t t-esc="currency"/></p>
                 </div>
 
                 <script type="text/javascript">
+                    <![CDATA[
                     (function () {
                         var box = document.querySelector(".box");
                         var label = document.getElementById("stateLabel");
@@ -422,6 +527,7 @@
                             return;
                         }
                         var orderId = box.getAttribute("data-order-id");
+                        var provider = (box.getAttribute("data-provider") || "").toLowerCase();
                         if (!orderId) {
                             return;
                         }
@@ -434,7 +540,7 @@
                             })
                                 .then(function (res) { return res.json(); })
                                 .then(function (payload) {
-                                    var result = payload &amp;&amp; payload.result ? payload.result : payload;
+                                    var result = payload && payload.result ? payload.result : payload;
                                     if (!result || result.error) {
                                         window.setTimeout(poll, 5000);
                                         return;
@@ -460,8 +566,10 @@
                                 });
                         }
 
-                        window.setTimeout(poll, 2500);
+                        var firstPollDelay = provider === "kushki" ? 900 : 2500;
+                        window.setTimeout(poll, firstPollDelay);
                     })();
+                    ]]>
                 </script>
             </body>
         </html>

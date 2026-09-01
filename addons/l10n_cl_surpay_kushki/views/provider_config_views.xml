@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="surpay_provider_config_form_kushki" model="ir.ui.view">
+        <field name="name">surpay.provider.config.form.kushki</field>
+        <field name="model">surpay.provider.config</field>
+        <field name="inherit_id" ref="surpay_base.surpay_provider_config_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Terminales Kushki" name="kushki_terminals" invisible="provider != 'kushki'">
+                    <field name="kushki_terminal_ids" nolabel="1">
+                        <list editable="bottom" create="1" delete="1">
+                            <field name="active"/>
+                            <field name="partner_id"/>
+                            <field name="terminal_alias"/>
+                            <field name="terminal_serial"/>
+                            <field name="note"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

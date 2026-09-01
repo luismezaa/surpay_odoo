@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import time
+import uuid
 from urllib.parse import parse_qsl, urlencode
 
 import requests
@@ -64,6 +65,7 @@ class SurpayApiController(http.Controller):
     def _provider_service_name(provider):
         mapping = {
             "depay": "surpay.depay.api",
+            "kushki": "surpay.kushki.api",
         }
         return mapping.get(provider)
 
@@ -287,11 +289,13 @@ class SurpayApiController(http.Controller):
         expires_in = payload.get("expires_in")
         local_country = self._normalize_country_code(payload.get("local_country") or client.default_local_country)
         qr_from = self._normalize_country_code(payload.get("qr_from") or client.default_qr_from)
+        terminal_serial = str(payload.get("terminal_serial") or "").strip()
+        provider_mode = str(payload.get("provider_mode") or "").strip().lower()
 
         _logger.info(
             f"[INTENT DEBUG] provider={provider}, requested_provider={requested_provider}, amount={amount}, "
             f"currency={currency}, external_order_id={external_order_id}, concept={concept}, expires_in={expires_in}, "
-            f"local_country={local_country}, qr_from={qr_from}"
+            f"local_country={local_country}, qr_from={qr_from}, terminal_serial={terminal_serial}, provider_mode={provider_mode}"
         )
 
         if not provider:
@@ -314,6 +318,10 @@ class SurpayApiController(http.Controller):
         if qr_from and qr_from not in self.ALLOWED_QR_FROM:
             _logger.warning(f"[INTENT DEBUG] qr_from inválido: {qr_from}")
             return self._error(400, "invalid_qr_from", "qr_from must be one of: AR, BR, PE.")
+
+        if provider == "kushki" and not terminal_serial:
+            _logger.warning("[INTENT DEBUG] terminal_serial es obligatorio para Kushki")
+            return self._error(400, "missing_terminal_serial", "terminal_serial is required for kushki provider.")
 
         try:
             amount = float(amount)
@@ -376,6 +384,11 @@ class SurpayApiController(http.Controller):
             return self._error(400, "provider_not_configured", "No provider configuration found for the selected provider.")
 
         callback_url = self._build_provider_callback_url(provider)
+        provider_client_transaction_id = ""
+        provider_terminal_serial = ""
+        if provider == "kushki":
+            provider_client_transaction_id = str(uuid.uuid4())
+            provider_terminal_serial = terminal_serial.upper()
 
         _logger.info(f"[INTENT DEBUG] Creando intent: order_id={order_id}, provider_config_id={provider_config.id}, callback_url={callback_url}")
         intent = intent_model.create(
@@ -384,6 +397,8 @@ class SurpayApiController(http.Controller):
                 "external_order_id": external_order_id,
                 "provider": provider,
                 "requested_provider": requested_provider or provider,
+                "provider_client_transaction_id": provider_client_transaction_id,
+                "provider_terminal_serial": provider_terminal_serial,
                 "source_channel": "external",
                 "base_amount": amount,
                 "commission_percent": commission_data["commission_percent"],
@@ -405,31 +420,45 @@ class SurpayApiController(http.Controller):
         )
         transaction = intent.ensure_transaction()
 
+        if provider == "kushki":
+            # Kushki async callbacks can arrive before this request commits.
+            # Persist intent and transaction early to avoid webhook not_found races.
+            request.env.cr.commit()
+
         external_reference = external_order_id or order_id
-        depay_payload = {
+        provider_payload = {
             "amount": amount_to_provider,
             "local_currency": currency,
             "external_reference": external_reference,
             "notification_url": callback_url,
         }
         display_concept = concept or f"Compra de Giftcard {int(amount_to_provider)} {currency}"
-        provider_request_payload = dict(depay_payload)
-        provider_request_payload["display_concept"] = display_concept
         if local_country:
-            depay_payload["local_country"] = local_country
+            provider_payload["local_country"] = local_country
         if qr_from:
-            depay_payload["qr_from"] = qr_from
-        pos_id = provider_config.get_credentials().get("pos_id")
-        if not pos_id and provider == "depay":
-            depay_cfg = provider_service._config()
-            pos_id = depay_cfg.get("pos_id", "")
-        if pos_id:
-            depay_payload["pos_external_reference"] = pos_id
+            provider_payload["qr_from"] = qr_from
+
+        if provider == "depay":
+            pos_id = provider_config.get_credentials().get("pos_id")
+            if not pos_id:
+                depay_cfg = provider_service._config()
+                pos_id = depay_cfg.get("pos_id", "")
+            if pos_id:
+                provider_payload["pos_external_reference"] = pos_id
+        elif provider == "kushki":
+            provider_payload["terminal_serial"] = terminal_serial
+            provider_payload["partner_id"] = client.partner_id.id if client.partner_id else False
+            provider_payload["client_transaction_id"] = provider_client_transaction_id
+            if provider_mode in {"sync", "async"}:
+                provider_payload["provider_mode"] = provider_mode
+
+        provider_request_payload = dict(provider_payload)
+        provider_request_payload["display_concept"] = display_concept
 
         try:
-            _logger.info(f"[INTENT DEBUG] Llamando a provider_service.create_qr con depay_payload: {depay_payload}")
+            _logger.info(f"[INTENT DEBUG] Llamando a provider_service.create_qr con provider_payload: {provider_payload}")
             depay_response = provider_service.create_qr(
-                depay_payload,
+                provider_payload,
                 provider_config=provider_config,
             )
             _logger.info(f"[INTENT DEBUG] Respuesta de provider_service.create_qr: {depay_response}")
@@ -456,13 +485,23 @@ class SurpayApiController(http.Controller):
             return self._error(502, "provider_error", "Provider QR creation failed.")
 
         provider_order_id = depay_response.get("order_id")
-        depay_raw_status = (
-            depay_response.get("order_status")
-            or depay_response.get("orderStatus")
-            or depay_response.get("state")
-            or "PENDING"
+        provider_client_transaction_id = (
+            depay_response.get("client_transaction_id")
+            or provider_client_transaction_id
         )
-        mapped_state = provider_service.map_depay_status(depay_raw_status)
+        provider_terminal_serial = (
+            depay_response.get("terminal_serial")
+            or provider_terminal_serial
+        )
+        if not provider_order_id and provider == "kushki":
+            provider_order_id = provider_client_transaction_id
+        depay_raw_status = provider_service.extract_status(depay_response) or "PENDING"
+        depay_message = (
+            provider_service.extract_status_message(depay_response)
+            if hasattr(provider_service, "extract_status_message")
+            else depay_response.get("message") or depay_response.get("detail") or ""
+        )
+        mapped_state = provider_service.map_depay_status(depay_raw_status, depay_message)
         qr_quote = provider_service.extract_qr_quote(
             depay_response,
             fallback_currency=currency,
@@ -472,6 +511,8 @@ class SurpayApiController(http.Controller):
         intent.write(
             {
                 "provider_payment_id": provider_order_id,
+                "provider_client_transaction_id": provider_client_transaction_id,
+                "provider_terminal_serial": provider_terminal_serial,
                 "state": mapped_state,
                 "provider_request_payload": provider_request_payload,
                 "provider_response_payload": depay_response,
@@ -480,12 +521,16 @@ class SurpayApiController(http.Controller):
         )
         intent.sync_transaction()
 
+        qr_data = None
+        if provider == "depay":
+            qr_data = depay_response.get("qr_data") or depay_response.get("qr_code")
+
         response_payload = intent.normalized_payload()
         response_payload.update(
             {
-                "qr_data": depay_response.get("qr_data") or depay_response.get("qr_code"),
+                "qr_data": qr_data,
                 "provider_order_id": provider_order_id,
-                "provider_status": depay_response.get("order_status") or depay_response.get("status"),
+                "provider_status": depay_response.get("order_status") or depay_response.get("orderStatus") or depay_response.get("status"),
             }
         )
         return request.make_json_response(response_payload, status=201)
@@ -520,6 +565,9 @@ class SurpayApiController(http.Controller):
             "concept": request_payload.get("display_concept") or request_payload.get("external_reference") or intent.external_order_id or intent.order_id,
             "amount_display": amount_display,
             "currency": provider_payload.get("user_currency") or intent.currency,
+            "provider": intent.provider,
+            "provider_terminal_serial": intent.provider_terminal_serial or provider_payload.get("terminal_serial") or "",
+            "provider_status": provider_payload.get("order_status") or provider_payload.get("status") or "",
             "state": intent.state,
             "expires_at": intent.expires_at,
             "qr_data": qr_data,
@@ -616,124 +664,6 @@ class SurpayApiController(http.Controller):
                 _logger.info("Provider status refresh failed for %s: %s", intent.order_id, exc)
 
         return request.make_json_response(intent.normalized_payload(), status=200)
-
-    @http.route(
-        "/api/v1/webhooks/providers/<string:provider>",
-        type="http",
-        auth="public",
-        methods=["POST"],
-        csrf=False,
-    )
-    def provider_webhook(self, provider):
-        route_provider = (provider or "").strip().lower()
-        provider = self._normalize_provider(route_provider)
-        if not provider:
-            return self._error(400, "missing_provider", "Provider route parameter is required.")
-        if provider not in self._supported_providers():
-            return self._error(400, "unsupported_provider", "Provider is not supported.")
-
-        provider_service = self._resolve_provider_service(provider)
-        if provider_service is None:
-            return self._error(501, "provider_service_not_available", "Provider service is not available.")
-
-        raw_body = self._raw_body()
-        try:
-            payload = json.loads(raw_body.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            return self._error(400, "invalid_payload", "Invalid JSON callback payload.")
-
-        provider_order_id = payload.get("order_id")
-        if not provider_order_id:
-            return self._error(400, "missing_order_id", "Callback payload missing order_id.")
-
-        intent = (
-            request.env["surpay.payment.intent"]
-            .sudo()
-            .search([("provider_payment_id", "=", provider_order_id)], limit=1)
-        )
-        if not intent:
-            intent = (
-                request.env["surpay.payment.intent"]
-                .sudo()
-                .search([("order_id", "=", provider_order_id)], limit=1)
-            )
-
-        if not intent:
-            return self._error(404, "not_found", "Payment intent not found for provider order_id.")
-
-        if (intent.provider or "").strip().lower() != provider:
-            return self._error(
-                409,
-                "provider_mismatch_webhook",
-                "Webhook provider does not match payment intent provider.",
-            )
-
-        signature_header = request.httprequest.headers.get("signature")
-        signature_valid = provider_service.validate_callback_signature(
-            raw_body,
-            signature_header,
-            provider_config=intent.provider_config_id,
-        )
-        if not signature_valid:
-            return self._error(401, "invalid_provider_signature", "Invalid provider callback signature.")
-
-        mapped_state = provider_service.map_depay_status(
-            payload.get("status") or payload.get("order_status") or payload.get("orderStatus") or payload.get("state"),
-            payload.get("message") or payload.get("detail"),
-        )
-        existing_payload = dict(intent.provider_response_payload or {})
-        merged_payload = dict(existing_payload)
-        merged_payload.update(payload or {})
-        if not (merged_payload.get("qr_data") or merged_payload.get("qr_code")):
-            merged_payload["qr_data"] = existing_payload.get("qr_data") or existing_payload.get("qr_code")
-        intent.write(
-            {
-                "state": mapped_state,
-                "provider_response_payload": merged_payload,
-                **provider_service.extract_qr_quote(
-                    merged_payload,
-                    fallback_currency=intent.currency,
-                    fallback_amount=intent.amount,
-                ),
-            }
-        )
-        transaction = intent.ensure_transaction()
-        intent.sync_transaction()
-
-        request.env["surpay.payment.event"].sudo().create(
-            {
-                "transaction_id": transaction.id,
-                "source": "provider",
-                "event_type": payload.get("type", "PAYMENT"),
-                "payload": payload,
-                "signature_valid": True,
-                "processing_status": "ok",
-            }
-        )
-
-        emitted_at = fields.Datetime.now()
-        outbound_payload = {
-            "contract_version": "v1",
-            "event_type": "payment.status.changed",
-            "emitted_at": emitted_at.replace(tzinfo=timezone.utc).isoformat(),
-            "transaction": {
-                "order_id": intent.order_id,
-                "external_order_id": intent.external_order_id,
-                "provider": provider,
-                "provider_order_id": intent.provider_payment_id,
-                "status": intent.state,
-                "status_code": self._state_code(intent.state),
-            },
-            "provider": {
-                "name": provider,
-                "status": payload.get("status"),
-                "message": payload.get("message"),
-                "raw": payload,
-            },
-        }
-        self._dispatch_outbound_webhook(transaction, outbound_payload)
-
-        return request.make_json_response({"status": "ok"}, status=200)
 
     @http.route("/api/v1/payments/extra-data", type="http", auth="public", methods=["POST"], csrf=False)
     def update_payment_extra_data(self):

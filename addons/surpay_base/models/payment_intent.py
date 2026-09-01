@@ -38,6 +38,14 @@ class SurpayPaymentIntent(models.Model):
     order_id = fields.Char(required=True, index=True)
     external_order_id = fields.Char(index=True)
     provider_payment_id = fields.Char(index=True)
+    provider_client_transaction_id = fields.Char(
+        index=True,
+        help="Identificador de transacción idempotente enviado al proveedor (ej. Kushki client_transaction_id).",
+    )
+    provider_terminal_serial = fields.Char(
+        index=True,
+        help="Serial de terminal utilizado para la operación del proveedor.",
+    )
     base_amount = fields.Float(default=0.0)
     commission_percent = fields.Float(digits=(16, 4), default=0.0)
     commission_amount = fields.Float(default=0.0)
@@ -99,9 +107,10 @@ class SurpayPaymentIntent(models.Model):
 
     @api.model
     def _default_expiration_seconds(self):
-        value = self.env["ir.config_parameter"].sudo().get_param(
-            "l10n_cl_surpay_depay.default_expiration_seconds", "900"
-        )
+        params = self.env["ir.config_parameter"].sudo()
+        value = params.get_param("surpay_base.payment_intent_default_expiration_seconds")
+        if not value:
+            value = params.get_param("l10n_cl_surpay_depay.default_expiration_seconds", "900")
         try:
             seconds = int(value)
         except ValueError as exc:
@@ -128,6 +137,8 @@ class SurpayPaymentIntent(models.Model):
             "external_order_id": self.external_order_id,
             "provider": self.requested_provider or self.provider,
             "provider_payment_id": self.provider_payment_id,
+            "provider_client_transaction_id": self.provider_client_transaction_id,
+            "provider_terminal_serial": self.provider_terminal_serial,
             "state": self.state,
             "base_amount": self.base_amount,
             "commission_percent": self.commission_percent,
@@ -167,6 +178,8 @@ class SurpayPaymentIntent(models.Model):
                 "provider": self.provider,
                 "provider_config_id": self.provider_config_id.id,
                 "provider_payment_id": self.provider_payment_id,
+                "provider_client_transaction_id": self.provider_client_transaction_id,
+                "provider_terminal_serial": self.provider_terminal_serial,
                 "state": self.state,
                 "base_amount": self.base_amount,
                 "commission_percent": self.commission_percent,
@@ -203,6 +216,8 @@ class SurpayPaymentIntent(models.Model):
                 "provider": rec.provider,
                 "provider_config_id": rec.provider_config_id.id,
                 "provider_payment_id": rec.provider_payment_id,
+                "provider_client_transaction_id": rec.provider_client_transaction_id,
+                "provider_terminal_serial": rec.provider_terminal_serial,
                 "state": rec.state,
                 "base_amount": rec.base_amount,
                 "commission_percent": rec.commission_percent,

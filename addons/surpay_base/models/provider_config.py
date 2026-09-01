@@ -17,6 +17,7 @@ class SurpayProviderConfig(models.Model):
     PROVIDERS = [
         ("depay", "Depay"),
         ("klap", "Klap"),
+        ("kushki", "Kushki"),
     ]
     ENVIRONMENTS = [
         ("sandbox", "Sandbox"),
@@ -54,7 +55,7 @@ class SurpayProviderConfig(models.Model):
 
     # Encrypted credentials
     api_key = fields.Char(
-        required=True,
+        required=False,
         help="API Key del proveedor (cifrada en base de datos)",
     )
     customer_uuid = fields.Char(
@@ -72,6 +73,10 @@ class SurpayProviderConfig(models.Model):
     base_url = fields.Char(
         required=False,
         help="URL base del API del proveedor (cifrada en base de datos)",
+    )
+    business_code = fields.Char(
+        required=False,
+        help="Business Code del proveedor (cifrado en base de datos)",
     )
 
     # Non-encrypted
@@ -210,6 +215,7 @@ class SurpayProviderConfig(models.Model):
             "pos_id": self._decrypt_field(self.pos_id),
             "webhook_secret": self._decrypt_field(self.webhook_secret),
             "base_url": self._decrypt_field(self.base_url),
+            "business_code": self._decrypt_field(self.business_code),
             "webhook_url": self.webhook_url,
         }
 
@@ -225,6 +231,9 @@ class SurpayProviderConfig(models.Model):
         elif self.provider == "klap":
             if not self.api_key:
                 raise ValidationError(_("La API Key de Klap es obligatoria"))
+        elif self.provider == "kushki":
+            if not self.business_code:
+                raise ValidationError(_("El Business Code de Kushki es obligatorio"))
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -240,6 +249,8 @@ class SurpayProviderConfig(models.Model):
                 vals["webhook_secret"] = self._encrypt_field(vals["webhook_secret"])
             if "base_url" in vals and vals["base_url"]:
                 vals["base_url"] = self._encrypt_field(vals["base_url"])
+            if "business_code" in vals and vals["business_code"]:
+                vals["business_code"] = self._encrypt_field(vals["business_code"])
 
         records = super().create(vals_list)
         records._validate_credentials()
@@ -257,6 +268,8 @@ class SurpayProviderConfig(models.Model):
             vals["webhook_secret"] = self._encrypt_field(vals["webhook_secret"])
         if "base_url" in vals and vals["base_url"]:
             vals["base_url"] = self._encrypt_field(vals["base_url"])
+        if "business_code" in vals and vals["business_code"]:
+            vals["business_code"] = self._encrypt_field(vals["business_code"])
 
         result = super().write(vals)
         self._validate_credentials()
@@ -282,6 +295,8 @@ class SurpayProviderConfig(models.Model):
                 self._test_depay_connection(creds)
             elif self.provider == "klap":
                 self._test_klap_connection(creds)
+            elif self.provider == "kushki":
+                self._test_kushki_connection(creds)
             else:
                 raise UserError(_("La prueba de conexion no esta implementada para %s") % self.provider)
             
@@ -415,3 +430,13 @@ class SurpayProviderConfig(models.Model):
             
         except requests.exceptions.RequestException as e:
             raise UserError(_("La solicitud HTTP fallo: %s") % str(e))
+
+    def _test_kushki_connection(self, creds):
+        """Validate minimal Kushki configuration required for runtime requests."""
+        business_code = (creds.get("business_code") or "").strip()
+        base_url = (creds.get("base_url") or "").strip()
+
+        if not business_code:
+            raise ValidationError(_("El Business Code de Kushki es obligatorio"))
+        if base_url and not (base_url.startswith("http://") or base_url.startswith("https://")):
+            raise ValidationError(_("La URL base de Kushki debe iniciar con http:// o https://"))
