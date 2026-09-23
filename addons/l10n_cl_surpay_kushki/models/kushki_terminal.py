@@ -34,6 +34,9 @@ class SurpayProviderConfig(models.Model):
             )
             if terminal:
                 return terminal
+            raise ValidationError(
+                _("El serial de terminal '%s' no está asociado al cliente seleccionado.") % serial
+            )
 
         if serial and not commercial_partner:
             terminals = terminal_model.search(

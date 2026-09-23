@@ -3,7 +3,7 @@ import json
 import logging
 import base64
 
-from odoo import http
+from odoo import fields, http
 from odoo.exceptions import AccessError
 from odoo.http import request
 
@@ -379,14 +379,19 @@ class SurpayInternalSaleController(http.Controller):
 
         provider_response_payload["dispatch_state"] = "running"
         provider_response_payload.pop("dispatch_error", None)
-        intent.write({"provider_response_payload": provider_response_payload})
+        intent.write(
+            {
+                "provider_response_payload": provider_response_payload,
+                "provider_dispatched_at": fields.Datetime.now(),
+            }
+        )
 
         # Persist running state to avoid duplicate dispatch while the terminal call is in flight.
         request.env.cr.commit()
 
         provider_service = request.env["surpay.kushki.api"].sudo()
         try:
-            provider_response = provider_service.create_qr(
+            provider_response = provider_service.create_payment(
                 provider_payload,
                 provider_config=intent.provider_config_id,
             )
@@ -408,7 +413,7 @@ class SurpayInternalSaleController(http.Controller):
         provider_terminal_serial = provider_response.get("terminal_serial") or intent.provider_terminal_serial
         provider_status = provider_service.extract_status(provider_response)
         provider_message = provider_service.extract_status_message(provider_response)
-        mapped_state = provider_service.map_depay_status(provider_status, provider_message)
+        mapped_state = provider_service.map_status(provider_status, provider_message)
 
         merged_payload = dict(intent.provider_response_payload or {})
         merged_payload.update(provider_response or {})
@@ -422,7 +427,7 @@ class SurpayInternalSaleController(http.Controller):
                 "provider_terminal_serial": provider_terminal_serial,
                 "state": mapped_state,
                 "provider_response_payload": merged_payload,
-                **provider_service.extract_qr_quote(
+                **provider_service.extract_payment_quote(
                     merged_payload,
                     fallback_currency=intent.currency,
                     fallback_amount=intent.amount,
@@ -551,6 +556,9 @@ class SurpayInternalSaleController(http.Controller):
         if tx.provider == "kushki" and tx.state not in self.FINAL_STATES:
             self._dispatch_kushki_charge_if_needed(tx)
             tx = request.env["surpay.payment.transaction"].sudo().browse(tx.id)
+
+        if tx.state not in self.FINAL_STATES:
+            request.env["surpay.payment.intent"].sudo().search([("transaction_id", "=", tx.id)], limit=1).enforce_pending_timeout()
 
         if tx.provider == "depay" and tx.provider_payment_id and tx.state not in self.FINAL_STATES:
             try:

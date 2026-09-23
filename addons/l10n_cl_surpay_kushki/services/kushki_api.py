@@ -16,14 +16,19 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from odoo import _, models
 from odoo.exceptions import ValidationError
 
+from odoo.addons.surpay_base.models.provider_service import SurpayApiRequestError
+
 _logger = logging.getLogger(__name__)
 
 
 class KushkiApiService(models.AbstractModel):
     _name = "surpay.kushki.api"
+    _inherit = "surpay.provider.service"
     _description = "Servicio API de Kushki"
 
-    ZERO_DECIMAL_CURRENCIES = {"CLP", "JPY", "PYG"}
+    # Los terminales Kushki de Surpay operan solo en pesos chilenos (sin decimales).
+    CURRENCY = "CLP"
+    ABORT_TIMEOUT_SECONDS = 10
 
     @staticmethod
     def _object_payload(payload):
@@ -76,17 +81,12 @@ class KushkiApiService(models.AbstractModel):
         cfg = {
             "base_url": (creds.get("base_url") or default_host).strip(),
             "business_code": (creds.get("business_code") or "").strip(),
+            # Timeout HTTP del acuse async (el resultado llega por webhook, no en esta respuesta).
             "timeout": int(
                 self.env["ir.config_parameter"].sudo().get_param(
-                    "l10n_cl_surpay_kushki.timeout_seconds", "90"
+                    "l10n_cl_surpay_kushki.timeout_seconds", "30"
                 )
             ),
-            "status_path": self.env["ir.config_parameter"].sudo().get_param(
-                "l10n_cl_surpay_kushki.payment_status_path", ""
-            ),
-            "default_mode": (self.env["ir.config_parameter"].sudo().get_param(
-                "l10n_cl_surpay_kushki.charge_mode", "async"
-            ) or "async").strip().lower(),
             "provider_config": provider_config,
         }
 
@@ -96,11 +96,6 @@ class KushkiApiService(models.AbstractModel):
             raise ValidationError(_("Falta configurar la URL base de Kushki."))
 
         return cfg
-
-    @staticmethod
-    def _normalize_mode(mode, default_mode="async"):
-        candidate = (mode or default_mode or "async").strip().lower()
-        return candidate if candidate in {"sync", "async"} else "async"
 
     @staticmethod
     def _timestamp_seconds():
@@ -158,28 +153,33 @@ class KushkiApiService(models.AbstractModel):
             "Content-Type": "application/json",
         }
 
-    @classmethod
-    def _to_minor_units(cls, amount, currency):
-        value = Decimal(str(amount or 0))
-        currency = (currency or "").upper()
-        if currency in cls.ZERO_DECIMAL_CURRENCIES:
-            return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-        return int((value * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    @staticmethod
+    def _to_minor_units(amount):
+        return int(Decimal(str(amount or 0)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
     @staticmethod
-    def _build_charge_endpoint(base_url, terminal_serial, mode):
+    def _terminal_endpoint(base_url, terminal_serial, operation):
         serial = (terminal_serial or "").strip()
         if not serial:
-            raise ValidationError(_("Kushki requiere un serial de terminal para ejecutar charge."))
-        normalized_mode = (mode or "sync").strip().lower()
-        return f"{base_url.rstrip('/')}/terminal/v1/{serial}/{normalized_mode}/charge"
+            raise ValidationError(_("Kushki requiere un serial de terminal."))
+        return f"{base_url.rstrip('/')}/terminal/v1/{serial}/{operation}"
 
-    def _build_charge_payload(self, payload, client_transaction_id, terminal_label, mode):
+    def _build_charge_payload(self, payload, client_transaction_id, terminal_label):
         amount = payload.get("amount")
-        currency = payload.get("local_currency")
-        amount_minor = self._to_minor_units(amount, currency)
-        tip_minor = self._to_minor_units(payload.get("tip") or 0, currency)
-        cashback_minor = self._to_minor_units(payload.get("cashback_amount") or 0, currency)
+        currency = (payload.get("local_currency") or self.CURRENCY).upper()
+        if currency != self.CURRENCY:
+            raise ValidationError(_("Kushki solo opera en %s (recibido: %s).") % (self.CURRENCY, currency))
+        amount_minor = self._to_minor_units(amount)
+        tip_minor = self._to_minor_units(payload.get("tip") or 0)
+        cashback_minor = self._to_minor_units(payload.get("cashback_amount") or 0)
+        _logger.info(
+            "[KUSHKI][amount] currency=%s original_amount=%s amount_minor=%s tip_minor=%s cashback_minor=%s",
+            currency,
+            amount,
+            amount_minor,
+            tip_minor,
+            cashback_minor,
+        )
 
         metadata = {
             "reference": (payload.get("reference") or payload.get("external_reference") or "").strip(),
@@ -193,7 +193,7 @@ class KushkiApiService(models.AbstractModel):
                 "subtotal_iva0": amount_minor,
                 "subtotal_iva": 0,
                 "iva": 0,
-                "tip": tip_minor,
+                #"tip": tip_minor,
                 "extra_taxes": payload.get("extra_taxes") or {
                     "airport_tax": 0,
                     "iac": 0,
@@ -204,42 +204,50 @@ class KushkiApiService(models.AbstractModel):
             "metadata": metadata,
         }
 
-        
-
         if cashback_minor:
             request_payload["cashback_amount"] = cashback_minor
 
         if payload.get("query_deferred") is not None:
             request_payload["query_deferred"] = bool(payload.get("query_deferred"))
 
-        if (mode or "sync").strip().lower() == "async":
-            events_webhook_url = (payload.get("events_webhook_url") or payload.get("notification_url") or "").strip()
-            if not events_webhook_url:
-                raise ValidationError(_("Kushki async charge requiere events_webhook_url o notification_url."))
-            request_payload["events_webhook_url"] = events_webhook_url
+        events_webhook_url = (payload.get("events_webhook_url") or payload.get("notification_url") or "").strip()
+        if not events_webhook_url:
+            raise ValidationError(_("Kushki async charge requiere events_webhook_url o notification_url."))
+        request_payload["events_webhook_url"] = events_webhook_url
 
         return request_payload
 
-    def _send_charge(self, cfg, terminal_serial, request_payload, mode):
+    def _post_terminal(self, cfg, terminal_serial, operation, request_payload, timeout):
+        """POST cifrado a un endpoint de terminal Kushki (charge, abort, ...)."""
         timestamp = self._timestamp_seconds()
         body_json = json.dumps(request_payload, separators=(",", ":"), ensure_ascii=False)
         encrypted_data = self._encrypt_data(body_json, timestamp, terminal_serial, cfg["business_code"])
         headers = self._charge_headers(cfg, request_payload, timestamp, terminal_serial)
         body = json.dumps({"data": encrypted_data}, separators=(",", ":"), ensure_ascii=False)
-        url = self._build_charge_endpoint(cfg["base_url"], terminal_serial, mode)
+        url = self._terminal_endpoint(cfg["base_url"], terminal_serial, operation)
 
-        _logger.info("[KUSHKI][charge] POST %s | terminal=%s | body=%s", url, terminal_serial, body_json)
-        response = requests.post(url, headers=headers, data=body.encode("utf-8"), timeout=cfg["timeout"])
-        _logger.info("[KUSHKI][charge] response status=%s body=%s", response.status_code, response.text[:500])
-        response.raise_for_status()
+        _logger.info("[KUSHKI][%s] POST %s | terminal=%s | body=%s", operation, url, terminal_serial, body_json)
+        response = requests.post(url, headers=headers, data=body.encode("utf-8"), timeout=timeout)
+        _logger.info("[KUSHKI][%s] response status=%s body=%s", operation, response.status_code, response.text[:500])
 
-        data = response.json() if response.text else {}
+        try:
+            data = response.json() if response.text else {}
+        except ValueError:
+            data = {}
+        if response.status_code >= 400:
+            # Errores de Kushki: {type, code, param, message, object} (p. ej. 409 TER-003 terminal ocupado).
+            detail = data.get("message") if isinstance(data, dict) else ""
+            code = data.get("code") if isinstance(data, dict) else ""
+            raise ValidationError(
+                _("Kushki rechazó %s (HTTP %s %s): %s")
+                % (operation, response.status_code, code or "", detail or response.text[:200])
+            )
         if not isinstance(data, dict):
             raise ValidationError(_("La respuesta de Kushki no tiene formato JSON objeto."))
         return data
 
     @classmethod
-    def _derive_charge_status(cls, data, mode):
+    def _derive_charge_status(cls, data):
         if cls.is_terminal_error_payload(data):
             return "TERMINAL_REJECTED"
         if cls.is_approved_payload(data):
@@ -254,11 +262,11 @@ class KushkiApiService(models.AbstractModel):
         if code == "-1" and "cancel" in message.lower():
             return "TERMINAL_CANCELED"
 
-        return "TERMINAL_ACKNOWLEDGED" if mode == "async" else "PENDING"
+        return "TERMINAL_ACKNOWLEDGED"
 
-    def create_qr(self, payload, provider_config=None):
-        # Mantiene la firma común multi-provider, pero en Kushki esta operación
-        # no genera QR: envía un comando charge al terminal POS.
+    def create_payment(self, payload, provider_config=None):
+        # Envía el charge async al terminal: Kushki levanta su app de pago en el terminal y el
+        # resultado llega después por webhook (events_webhook_url).
         cfg = self._assert_config(provider_config=provider_config)
         payload = dict(payload or {})
 
@@ -269,14 +277,18 @@ class KushkiApiService(models.AbstractModel):
             terminal_serial=terminal_serial,
         )
 
-        mode = self._normalize_mode(payload.get("provider_mode"), cfg.get("default_mode"))
-
         client_transaction_id = (
             str(payload.get("client_transaction_id") or "").strip() or str(uuid.uuid4())
         )
         terminal_label = (terminal.terminal_alias or "").strip() or (terminal.terminal_serial or "").strip()
-        request_payload = self._build_charge_payload(payload, client_transaction_id, terminal_label, mode)
-        data = self._send_charge(cfg, terminal.terminal_serial, request_payload, mode)
+        request_payload = self._build_charge_payload(payload, client_transaction_id, terminal_label)
+        try:
+            data = self._post_terminal(cfg, terminal.terminal_serial, "async/charge", request_payload, cfg["timeout"])
+        except (requests.Timeout, requests.ConnectionError):
+            # No sabemos si el terminal alcanzó a recibir el cobro: se aborta para no dejarlo cobrando
+            # una venta que Surpay dará por fallida.
+            self.abort_terminal(terminal.terminal_serial, provider_config=cfg["provider_config"])
+            raise
 
         terminal_data = data.get("terminal") if isinstance(data.get("terminal"), dict) else {}
 
@@ -288,32 +300,42 @@ class KushkiApiService(models.AbstractModel):
             )
 
         if not data.get("order_status"):
-            data["order_status"] = self._derive_charge_status(data, mode)
+            data["order_status"] = self._derive_charge_status(data)
 
         data.setdefault("client_transaction_id", client_transaction_id)
         data.setdefault("terminal_serial", terminal_data.get("serialNumber") or terminal.terminal_serial)
-        data.setdefault("charge_mode", mode)
+        data.setdefault("charge_mode", "async")
         data.setdefault("business_code", cfg["business_code"])
         return data
 
-    def get_payment_status(self, provider_order_id, provider_config=None):
-        cfg = self._assert_config(provider_config=provider_config)
-        if not cfg.get("status_path"):
-            return {
-                "order_id": provider_order_id,
-                "status": "PENDING",
-                "detail": "Kushki Cloud no tiene status endpoint configurado; usar webhook para estado final.",
-            }
-        status_path = cfg["status_path"].format(provider_order_id=provider_order_id)
-        url = f"{cfg['base_url'].rstrip('/')}{status_path}"
-        _logger.info("[KUSHKI][get_payment_status] GET %s", url)
+    def abort_terminal(self, terminal_serial, provider_config=None):
+        """Cancela la transacción en curso en el terminal. Best effort: nunca lanza excepción.
 
-        body = ""
-        headers = self._headers(cfg, body)
-        response = requests.get(url, headers=headers, timeout=cfg["timeout"])
-        _logger.info("[KUSHKI][get_payment_status] response status=%s body=%s", response.status_code, response.text[:400])
-        response.raise_for_status()
-        return response.json() if response.text else {}
+        Solo funciona antes de APPROVAL_REQUESTED; después, el cobro sigue su curso en el adquirente.
+        """
+        try:
+            cfg = self._assert_config(provider_config=provider_config)
+            # Kushki exige firmar el literal {} en abort.
+            return self._post_terminal(cfg, terminal_serial, "sync/abort", {}, self.ABORT_TIMEOUT_SECONDS)
+        except Exception as exc:
+            _logger.warning("[KUSHKI][abort] No se pudo abortar terminal %s: %s", terminal_serial, exc)
+            return None
+
+    def supports_remote_status(self, provider_config=None):
+        # Kushki Cloud no tiene consulta de estado por transacción: el resultado llega solo por webhook
+        # y, si no llega, Surpay cierra la venta por timeout (pending_timeout_seconds).
+        return False
+
+    def pending_timeout_seconds(self, provider_config=None):
+        return int(
+            self.env["ir.config_parameter"].sudo().get_param(
+                "l10n_cl_surpay_kushki.pending_timeout_seconds", "90"
+            )
+        )
+
+    def on_pending_timeout(self, intent):
+        if intent.provider_terminal_serial:
+            self.abort_terminal(intent.provider_terminal_serial, provider_config=intent.provider_config_id)
 
     @staticmethod
     def extract_status(payload):
@@ -412,49 +434,7 @@ class KushkiApiService(models.AbstractModel):
             or ""
         )
 
-    @staticmethod
-    def _as_float(value):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    def extract_qr_quote(self, payload, fallback_currency="", fallback_amount=0.0):
-        data = payload if isinstance(payload, dict) else {}
-
-        has_qr_quote = any(
-            key in data
-            for key in ("currency", "qr_currency", "amount", "qr_amount", "converted_amount", "exchange_rate", "fx_rate")
-        )
-        if not has_qr_quote:
-            # Kushki terminal-only normalmente no entrega datos de cotización QR.
-            return {
-                "qr_currency": "",
-                "qr_converted_amount": 0.0,
-                "qr_exchange_rate": 0.0,
-            }
-
-        qr_currency = (data.get("currency") or data.get("qr_currency") or fallback_currency or "").upper()
-        qr_amount = self._as_float(
-            data.get("amount")
-            or data.get("qr_amount")
-            or data.get("converted_amount")
-            or fallback_amount
-        )
-        qr_rate = self._as_float(data.get("exchange_rate") or data.get("fx_rate"))
-
-        if qr_amount is None:
-            qr_amount = fallback_amount or 0.0
-        if qr_rate is None:
-            qr_rate = (qr_amount / fallback_amount) if fallback_amount else 0.0
-
-        return {
-            "qr_currency": qr_currency,
-            "qr_converted_amount": qr_amount,
-            "qr_exchange_rate": qr_rate or 0.0,
-        }
-
-    def map_depay_status(self, status, message=""):
+    def map_status(self, status, message=""):
         status = (status or "").upper()
         message = (message or "").lower()
 
@@ -505,3 +485,41 @@ class KushkiApiService(models.AbstractModel):
         # Current Kushki flow does not provide a stable callback signature
         # contract in this integration, so validation is skipped.
         return False
+
+    # ------------------------------------------------------------------
+    # Hooks de la API externa /api/v1/payments/intents
+    # ------------------------------------------------------------------
+    def api_default_currency(self, client):
+        return self.CURRENCY
+
+    def api_validate_intent_request(self, payload, client, provider_config, currency):
+        if currency != self.CURRENCY:
+            raise SurpayApiRequestError("unsupported_currency", f"kushki only supports {self.CURRENCY}.")
+        terminal_serial = str(payload.get("terminal_serial") or "").strip()
+        if not terminal_serial:
+            raise SurpayApiRequestError("missing_terminal_serial", "terminal_serial is required for kushki provider.")
+        try:
+            provider_config.resolve_kushki_terminal(partner=client.partner_id, terminal_serial=terminal_serial)
+        except ValidationError as exc:
+            raise SurpayApiRequestError("invalid_terminal_serial_for_client", str(exc)) from exc
+
+    def api_prepare_intent_vals(self, payload, client, provider_config):
+        return {
+            "provider_client_transaction_id": str(uuid.uuid4()),
+            "provider_terminal_serial": str(payload.get("terminal_serial") or "").strip().upper(),
+        }
+
+    def api_build_provider_payload(self, intent, payload, client, provider_config, provider_payload):
+        provider_payload.update(
+            {
+                "terminal_serial": intent.provider_terminal_serial,
+                "partner_id": client.partner_id.id if client.partner_id else False,
+                "client_transaction_id": intent.provider_client_transaction_id,
+                "reference": intent.concept or "",
+            }
+        )
+        return provider_payload
+
+    def api_commit_before_provider_call(self):
+        # Los callbacks async de Kushki pueden llegar antes de que termine este request.
+        return True

@@ -25,6 +25,7 @@
         "views/cash_closure_report_templates.xml",
         "views/internal_sale_templates.xml",
         "views/pwa_templates.xml",
+        "views/payment_link_templates.xml",
         "views/integration_docs_templates.xml",
     ],
     "installable": True,

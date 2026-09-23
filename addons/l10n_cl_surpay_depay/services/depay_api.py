@@ -8,12 +8,17 @@ import requests
 from odoo import _, models
 from odoo.exceptions import ValidationError
 
+from odoo.addons.surpay_base.models.provider_service import SurpayApiRequestError
+
 _logger = logging.getLogger(__name__)
 
 
 class DepayApiService(models.AbstractModel):
     _name = "surpay.depay.api"
+    _inherit = "surpay.provider.service"
     _description = "Servicio API de Depay"
+
+    ALLOWED_QR_FROM = {"AR", "BR", "PE"}
 
     def _config(self):
         params = self.env["ir.config_parameter"].sudo()
@@ -307,6 +312,44 @@ class DepayApiService(models.AbstractModel):
     @staticmethod
     def should_validate_callback_signature():
         return True
+
+    # ------------------------------------------------------------------
+    # Contrato surpay.provider.service
+    # ------------------------------------------------------------------
+    def create_payment(self, payload, provider_config=None):
+        return self.create_qr(payload, provider_config=provider_config)
+
+    def map_status(self, status, message=""):
+        return self.map_depay_status(status, message)
+
+    def extract_payment_quote(self, payload, fallback_currency="", fallback_amount=0.0):
+        return self.extract_qr_quote(payload, fallback_currency=fallback_currency, fallback_amount=fallback_amount)
+
+    @staticmethod
+    def _country_code(value):
+        return (value or "").strip().upper()
+
+    def api_validate_intent_request(self, payload, client, provider_config, currency):
+        qr_from = self._country_code(payload.get("qr_from") or client.default_qr_from)
+        if qr_from and qr_from not in self.ALLOWED_QR_FROM:
+            raise SurpayApiRequestError("invalid_qr_from", "qr_from must be one of: AR, BR, PE.")
+
+    def api_prepare_intent_vals(self, payload, client, provider_config):
+        return {"qr_from": self._country_code(payload.get("qr_from") or client.default_qr_from)}
+
+    def api_build_provider_payload(self, intent, payload, client, provider_config, provider_payload):
+        local_country = self._country_code(payload.get("local_country") or client.default_local_country)
+        if local_country:
+            provider_payload["local_country"] = local_country
+        if intent.qr_from:
+            provider_payload["qr_from"] = intent.qr_from
+        pos_id = provider_config.get_credentials().get("pos_id") or self._config().get("pos_id", "")
+        if pos_id:
+            provider_payload["pos_external_reference"] = pos_id
+        return provider_payload
+
+    def api_response_extras(self, intent, provider_response):
+        return {"qr_data": provider_response.get("qr_data") or provider_response.get("qr_code")}
 
     @staticmethod
     def dump_json(payload):

@@ -85,6 +85,24 @@ class SurpayPaymentTransaction(models.Model):
         for rec in self:
             rec.total_to_transfer = (rec.amount or 0.0) - (rec.commission_amount or 0.0)
 
+    def normalized_status_payload(self):
+        self.ensure_one()
+        final_states = {"paid", "failed", "expired", "cancelled"}
+        provider_raw = self.provider_raw if isinstance(self.provider_raw, dict) else {}
+        return {
+            "order_id": self.order_id,
+            "external_order_id": self.external_order_id,
+            "provider": self.provider,
+            "provider_payment_id": self.provider_payment_id,
+            "provider_client_transaction_id": self.provider_client_transaction_id,
+            "provider_terminal_serial": self.provider_terminal_serial,
+            "state": self.state,
+            "paid": self.state == "paid",
+            "failed": self.state in {"failed", "expired", "cancelled"},
+            "done": self.state in final_states,
+            "failure_reason": provider_raw.get("failure_reason") or "",
+        }
+
     def _format_amount_cl(self, amount):
         return "${}".format("{:,.0f}".format(amount or 0).replace(",", "."))
 

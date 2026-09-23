@@ -9,4 +9,14 @@
         <field name="interval_type">minutes</field>
         <field name="active">True</field>
     </record>
+
+    <record id="ir_cron_payment_intent_pending_timeout" model="ir.cron">
+        <field name="name">Surpay Timeout de pagos pendientes</field>
+        <field name="model_id" ref="model_surpay_payment_intent"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_enforce_pending_timeout()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
 </odoo>

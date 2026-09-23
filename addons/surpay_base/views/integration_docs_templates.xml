@@ -104,6 +104,7 @@
                         <strong>Contenido</strong>
                         <a href="#quickstart">Inicio rapido</a>
                         <a href="#prerequisites">Requisitos previos</a>
+                        <a href="#mobile-auth">Auth movil</a>
                         <a href="#hmac">Autenticacion HMAC</a>
                         <a href="#endpoints">Endpoints</a>
                         <a href="#return-flow">Retorno al comercio</a>
@@ -155,6 +156,44 @@
                                 <li>Generar <code>Idempotency-Key</code> unico por request de create intent.</li>
                             </ol>
                         </section>
+
+                                                <section id="mobile-auth">
+                                                        <h3>Auth movil (login Odoo -&gt; credenciales API)</h3>
+                                                        <p>Para el POS Android (modulo Kushki), Surpay expone endpoints para autenticar usuario Odoo y devolver credenciales de cliente API. Esto permite que la app firme HMAC para consumir la API externa. El usuario debe pertenecer al contacto (o una empresa hija) de un cliente API activo, y el serial del terminal debe estar asociado a ese cliente.</p>
+                                                        <ul>
+                                                                <li><code>POST /api/v1/mobile/auth/login</code>: autentica <code>username/password</code> y retorna session tokens + <code>client_id/client_secret</code>.</li>
+                                                                <li><code>POST /api/v1/mobile/auth/refresh</code>: renueva session tokens y vuelve a entregar credenciales API. Revoca la sesion (401) si el usuario, el cliente API o el terminal ya no estan habilitados.</li>
+                                                                <li><code>POST /api/v1/mobile/auth/logout</code>: revoca la sesion movil por <code>access_token</code> o <code>refresh_token</code>.</li>
+                                                        </ul>
+                                                        <p class="mb-1"><strong>Login request ejemplo</strong></p>
+                                                        <pre class="sp-code"><code>{
+    "username": "usuario@empresa.com",
+    "password": "********",
+    "device_id": "ANDROID-DEVICE-UUID",
+    "terminal_serial": "SERIAL-TERMINAL-KUSHKI"
+}</code></pre>
+                                                        <p class="mb-1 mt-2"><strong>Login response ejemplo</strong></p>
+                                                        <pre class="sp-code"><code>{
+    "token_type": "bearer",
+    "access_token": "...",
+    "refresh_token": "...",
+    "expires_at": "2026-09-02 20:00:00",
+    "refresh_expires_at": "2026-09-09 20:00:00",
+    "provider": "kushki",
+    "currency": "CLP",
+    "terminal_serial": "SERIAL-TERMINAL-KUSHKI",
+    "merchant_name": "Comercio",
+    "user_name": "Nombre Usuario",
+    "api_credentials": {
+        "client_id": "TU_CLIENT_ID",
+        "client_secret": "TU_CLIENT_SECRET",
+        "base_url": "https://TU-DOMINIO"
+    }
+}</code></pre>
+                                                        <div class="sp-highlight mt-3">
+                                                                Politica vigente: <strong>no hay rotacion automatica de client_secret</strong> por compatibilidad con otros consumidores externos. Se recomienda control compensatorio: almacenamiento seguro en dispositivo, pinning TLS y revocacion inmediata de sesion ante compromiso.
+                                                        </div>
+                                                </section>
 
                         <section id="hmac">
                             <h3>Autenticacion HMAC</h3>

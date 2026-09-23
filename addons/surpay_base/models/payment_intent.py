@@ -1,14 +1,29 @@
+import logging
 import uuid
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
+
+_logger = logging.getLogger(__name__)
 
 
 class SurpayPaymentIntent(models.Model):
     _name = "surpay.payment.intent"
     _description = "Intento de pago Surpay"
     _order = "id desc"
+
+    FINAL_STATES = ("paid", "failed", "expired", "cancelled")
+    STATE_CODES = {
+        "created": 1000,
+        "pending": 1100,
+        "paid": 2000,
+        "failed": 5000,
+        "expired": 5100,
+        "cancelled": 5200,
+    }
+    FAILURE_REASON_TIMEOUT = "timeout"
+    FAILURE_REASON_EXPIRED = "expired"
 
     state = fields.Selection(
         selection=[
@@ -78,6 +93,9 @@ class SurpayPaymentIntent(models.Model):
         default="webhook_only",
     )
     expires_at = fields.Datetime(required=True)
+    provider_dispatched_at = fields.Datetime(
+        help="Momento en que se envió el cobro al proveedor. Desde aquí corre el timeout de pago pendiente.",
+    )
 
     concept = fields.Char()
     provider_request_payload = fields.Json()
@@ -238,6 +256,150 @@ class SurpayPaymentIntent(models.Model):
             if rec.concept:
                 vals["concept"] = rec.concept
             tx.write(vals)
+
+    def is_final_state(self):
+        self.ensure_one()
+        return self.state in self.FINAL_STATES
+
+    def refresh_provider_status(self):
+        """Consulta el estado en el proveedor (si lo soporta) y lo aplica al intent y su transacción."""
+        for rec in self:
+            if rec.is_final_state() or not rec.provider_payment_id:
+                continue
+            service = self.env["surpay.provider.service"].for_provider(rec.provider)
+            if service is None or not service.supports_remote_status(provider_config=rec.provider_config_id):
+                continue
+
+            provider_status = service.get_payment_status(
+                rec.provider_payment_id,
+                provider_config=rec.provider_config_id,
+            )
+            mapped_state = service.map_status(
+                service.extract_status(provider_status),
+                service.extract_status_message(provider_status),
+            )
+            existing_payload = dict(rec.provider_response_payload or {})
+            merged_payload = dict(existing_payload)
+            merged_payload.update(provider_status or {})
+            existing_qr = existing_payload.get("qr_data") or existing_payload.get("qr_code")
+            if existing_qr and not (merged_payload.get("qr_data") or merged_payload.get("qr_code")):
+                merged_payload["qr_data"] = existing_qr
+            rec.write(
+                {
+                    "state": mapped_state,
+                    "provider_response_payload": merged_payload,
+                    **service.extract_payment_quote(
+                        merged_payload,
+                        fallback_currency=rec.currency,
+                        fallback_amount=rec.amount,
+                    ),
+                }
+            )
+            rec.sync_transaction()
+
+    def notify_status_changed(self, provider_status="", provider_message="", provider_raw=None):
+        """Emite el webhook saliente payment.status.changed al comercio con el estado actual."""
+        self.ensure_one()
+        transaction = self.ensure_transaction()
+        emitted_at = fields.Datetime.now()
+        self.env["surpay.payment.event"].sudo().create_outbound_webhook_event(
+            transaction,
+            {
+                "contract_version": "v1",
+                "event_type": "payment.status.changed",
+                "emitted_at": emitted_at.replace(tzinfo=timezone.utc).isoformat(),
+                "transaction": {
+                    "order_id": self.order_id,
+                    "external_order_id": self.external_order_id,
+                    "provider": self.provider,
+                    "provider_order_id": self.provider_payment_id,
+                    "status": self.state,
+                    "status_code": self.STATE_CODES.get(self.state, 1900),
+                },
+                "provider": {
+                    "name": self.provider,
+                    "status": provider_status,
+                    "message": provider_message,
+                    "raw": provider_raw or {},
+                },
+            },
+            event_type="payment.status.changed",
+            contract_version="v1",
+        )
+
+    def enforce_pending_timeout(self):
+        """Cierra los pagos sin resultado del proveedor pasado su timeout o su expiración.
+
+        Surpay es la fuente de verdad del estado: la app y los comercios dejan de esperar
+        cuando la transacción sale de pendiente, aunque el proveedor nunca responda.
+        El timeout del proveedor (p. ej. terminal sin respuesta) deja el pago fallido;
+        si no aplica, al pasar expires_at (p. ej. QR sin pagar) queda expirado.
+        """
+        now = fields.Datetime.now()
+        service_model = self.env["surpay.provider.service"]
+        for rec in self:
+            if rec.is_final_state():
+                continue
+            service = service_model.for_provider(rec.provider)
+            timeout = service.pending_timeout_seconds(provider_config=rec.provider_config_id) if service is not None else 0
+            started_at = rec.provider_dispatched_at or rec.create_date
+            if timeout and started_at and (now - started_at).total_seconds() >= timeout:
+                try:
+                    service.on_pending_timeout(rec)
+                except Exception as exc:
+                    _logger.warning("on_pending_timeout falló para %s: %s", rec.order_id, exc)
+                rec._close_unresolved(
+                    state="failed",
+                    reason=self.FAILURE_REASON_TIMEOUT,
+                    message=f"Sin resultado del proveedor tras {timeout} segundos.",
+                    event_type="payment.timeout",
+                    event_payload={"timeout_seconds": timeout, "started_at": str(started_at)},
+                    provider_status="SURPAY_TIMEOUT",
+                )
+            elif rec.expires_at and now >= rec.expires_at:
+                rec._close_unresolved(
+                    state="expired",
+                    reason=self.FAILURE_REASON_EXPIRED,
+                    message="El pago no se completó antes de su expiración.",
+                    event_type="payment.expired",
+                    event_payload={"expires_at": str(rec.expires_at)},
+                    provider_status="SURPAY_EXPIRED",
+                )
+
+    def _close_unresolved(self, state, reason, message, event_type, event_payload, provider_status):
+        """Cierra un pago pendiente por decisión de Surpay y avisa al comercio."""
+        self.ensure_one()
+        payload = dict(self.provider_response_payload or {})
+        payload.update({"failure_reason": reason, "failure_message": message})
+        self.write({"state": state, "provider_response_payload": payload})
+        self.sync_transaction()
+        self.env["surpay.payment.event"].sudo().create(
+            {
+                "transaction_id": self.transaction_id.id,
+                "source": "internal",
+                "event_type": event_type,
+                "payload": event_payload,
+                "processing_status": "ok",
+                "message": message,
+            }
+        )
+        _logger.info("Intent %s cerrado como %s (%s)", self.order_id, state, reason)
+        self.notify_status_changed(provider_status=provider_status, provider_message=message)
+
+    @api.model
+    def _cron_enforce_pending_timeout(self):
+        stale = self.search(
+            [
+                ("state", "in", ("created", "pending")),
+                ("create_date", ">=", fields.Datetime.now() - timedelta(days=2)),
+            ],
+            order="id asc",
+            limit=500,
+        )
+        for intent in stale:
+            intent.enforce_pending_timeout()
+            # Commit por intent: el abort al terminal es externo y no debe repetirse si otro falla.
+            self.env.cr.commit()
 
     @api.constrains("provider", "provider_config_id")
     def _check_provider_config_consistency(self):

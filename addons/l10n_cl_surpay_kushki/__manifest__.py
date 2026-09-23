@@ -5,7 +5,7 @@
     "category": "Accounting/Payment Providers",
     "author": "Surpay",
     "license": "LGPL-3",
-    "depends": ["base", "surpay_base", "l10n_cl_surpay_depay"],
+    "depends": ["base", "surpay_base"],
     "data": [
         "security/ir.model.access.csv",
         "views/provider_config_views.xml"
