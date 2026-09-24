@@ -12,6 +12,7 @@
         "data/ir_config_parameter_data.xml",
         "data/ir_cron_data.xml",
         "data/ir_sequence_data.xml",
+        "views/res_company_views.xml",
         "views/provider_config_views.xml",
         "views/api_client_views.xml",
         "views/commission_rule_views.xml",

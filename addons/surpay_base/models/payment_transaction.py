@@ -101,7 +101,36 @@ class SurpayPaymentTransaction(models.Model):
             "failed": self.state in {"failed", "expired", "cancelled"},
             "done": self.state in final_states,
             "failure_reason": provider_raw.get("failure_reason") or "",
+            "voucher": self._voucher_payload() if self.state == "paid" else None,
         }
+
+    def _voucher_payload(self):
+        """Voucher que imprime la APK, o None si el proveedor no define uno.
+
+        Cada proveedor lo implementa como {"client": [...], "merchant": [...]}: una lista de líneas por copia,
+        donde cada línea es {"type": "text"|"pair"|"separator"|"feed", ...} (ver _render_voucher_lines).
+        """
+        self.ensure_one()
+        return None
+
+    @staticmethod
+    def _render_voucher_lines(lines, width=42):
+        """Convierte las líneas de un voucher a texto de ancho fijo, para impresoras de texto plano."""
+        out = []
+        for line in lines:
+            kind = line.get("type")
+            if kind == "separator":
+                out.append("-" * width)
+            elif kind == "feed":
+                out.append("")
+            elif kind == "pair":
+                left, right = line.get("left") or "", line.get("right") or ""
+                out.append(left + " " * max(1, width - len(left) - len(right)) + right)
+            else:
+                text = line.get("text") or ""
+                align = line.get("align")
+                out.append(text.center(width).rstrip() if align == "center" else text.rjust(width) if align == "right" else text)
+        return "\n".join(out)
 
     def _format_amount_cl(self, amount):
         return "${}".format("{:,.0f}".format(amount or 0).replace(",", "."))
@@ -174,7 +203,12 @@ class SurpayPaymentTransaction(models.Model):
         if self.state != "paid":
             raise UserError(_("Solo se puede descargar voucher para transacciones pagadas."))
 
-        txt_content = self._build_ascii_voucher().encode("ascii", "ignore")
+        voucher = self._voucher_payload()
+        if voucher:
+            text = "\n\n\n".join(self._render_voucher_lines(voucher[copy]) for copy in ("client", "merchant")) + "\n"
+            txt_content = self._to_ascii(text).encode("ascii", "ignore")
+        else:
+            txt_content = self._build_ascii_voucher().encode("ascii", "ignore")
         file_name = "voucher_{}.txt".format(self.order_id or self.id)
         attachment = self.env["ir.attachment"].sudo().create(
             {

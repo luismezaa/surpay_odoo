@@ -13,3 +13,4 @@ from . import ir_ui_menu
 from . import mobile_api_session
 from . import provider_service
 from . import api_nonce
+from . import res_company

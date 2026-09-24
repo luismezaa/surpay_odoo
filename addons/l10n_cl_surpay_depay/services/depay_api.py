@@ -281,7 +281,11 @@ class DepayApiService(models.AbstractModel):
         status = (status or "").upper()
         message = (message or "").lower()
 
-        if status in {"COMPLETED", "PAID", "SUCCESS", "SUCCEEDED", "APPROVED"}:
+        # "success" es el acuse de la API al generar el QR (POST /v2/qr), no un pago: queda pendiente
+        # hasta que el webhook informe COMPLETED.
+        if status in {"SUCCESS", "SUCCEEDED"}:
+            return "pending"
+        if status in {"COMPLETED", "PAID", "APPROVED"}:
             return "paid"
         if status in {"FAILED", "REJECTED", "DECLINED", "ERROR"}:
             return "failed"
@@ -335,7 +339,11 @@ class DepayApiService(models.AbstractModel):
             raise SurpayApiRequestError("invalid_qr_from", "qr_from must be one of: AR, BR, PE.")
 
     def api_prepare_intent_vals(self, payload, client, provider_config):
-        return {"qr_from": self._country_code(payload.get("qr_from") or client.default_qr_from)}
+        return {
+            "qr_from": self._country_code(payload.get("qr_from") or client.default_qr_from),
+            # Terminal donde se mostró el QR; solo informativo (se imprime en el voucher).
+            "provider_terminal_serial": str(payload.get("terminal_serial") or "").strip().upper(),
+        }
 
     def api_build_provider_payload(self, intent, payload, client, provider_config, provider_payload):
         local_country = self._country_code(payload.get("local_country") or client.default_local_country)
