@@ -476,7 +476,7 @@ class SurpayInternalSaleController(http.Controller):
         self._ensure_new_sale_access()
         payload = {}
         try:
-            raw = request.httprequest.get_data(cache=False, as_text=True) or ""
+            raw = request.httprequest.get_data(as_text=True) or ""
             if raw:
                 payload = json.loads(raw)
         except Exception:

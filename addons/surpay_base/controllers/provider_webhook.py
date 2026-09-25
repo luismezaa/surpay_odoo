@@ -13,6 +13,13 @@ class SurpayProviderWebhookController(http.Controller):
 
     @staticmethod
     def _error(status_code, code, message):
+        _logger.warning(
+            "Webhook proveedor rechazado %s %s: %s (%s)",
+            request.httprequest.path,
+            status_code,
+            code,
+            message,
+        )
         return request.make_json_response(
             {
                 "error": {
@@ -25,7 +32,7 @@ class SurpayProviderWebhookController(http.Controller):
 
     @staticmethod
     def _raw_body():
-        return request.httprequest.get_data(cache=False, as_text=False)
+        return request.httprequest.get_data(as_text=False)
 
     @http.route(
         "/api/v1/webhooks/providers/<string:provider>",
@@ -47,6 +54,12 @@ class SurpayProviderWebhookController(http.Controller):
             return self._error(501, "provider_service_not_available", "Provider service is not available.")
 
         raw_body = self._raw_body()
+        _logger.info(
+            "Webhook %s recibido desde %s: %s",
+            provider,
+            request.httprequest.remote_addr,
+            raw_body[:2000].decode("utf-8", errors="replace"),
+        )
         try:
             payload = json.loads(raw_body.decode("utf-8") or "{}")
         except json.JSONDecodeError:
@@ -178,6 +191,14 @@ class SurpayProviderWebhookController(http.Controller):
                 "signature_valid": True,
                 "processing_status": "ok",
             }
+        )
+
+        _logger.info(
+            "Webhook %s procesado para %s: estado proveedor %s -> %s",
+            provider,
+            intent.order_id,
+            provider_status,
+            mapped_state,
         )
 
         intent.notify_status_changed(

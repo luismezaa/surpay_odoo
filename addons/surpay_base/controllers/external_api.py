@@ -51,7 +51,7 @@ class SurpayExternalApiController(http.Controller):
 
     @staticmethod
     def _raw_body():
-        return request.httprequest.get_data(cache=False, as_text=False)
+        return request.httprequest.get_data(as_text=False)
 
     @staticmethod
     def _body_sha256(raw_body):

@@ -38,7 +38,7 @@ class SurpayMobileAuthController(http.Controller):
 
     @staticmethod
     def _raw_body():
-        return request.httprequest.get_data(cache=False, as_text=False)
+        return request.httprequest.get_data(as_text=False)
 
     def _parse_payload(self):
         raw_body = self._raw_body() or b"{}"
